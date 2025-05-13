@@ -1,0 +1,22 @@
+.custom-navbar {
+    background-color: #007bff;
+  }
+  
+  .hero {
+    background: url('https://images.pexels.com/photos/3845804/pexels-photo-3845804.jpeg') center center/cover no-repeat;
+    height: 100vh;
+  }
+  
+  .hero h1, .hero p {
+    text-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+  }
+  
+  .login-container {
+    max-width: 400px;
+    margin: 100px auto;
+    padding: 30px;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    background-color: #fff;
+  }
+  

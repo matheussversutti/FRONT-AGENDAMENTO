@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard - Administrador</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      padding-top: 70px;
+    }
+  
+    .sidebar {
+      background-color: #f8f9fa;
+      height: 100vh;
+      padding-top: 20px;
+    }
+  
+    .sidebar a {
+      display: block;
+      padding: 10px 20px;
+      color: #333;
+      text-decoration: none;
+      cursor: pointer;
+      position: relative;
+    }
+  
+    .sidebar a:hover {
+      background-color: #e9ecef;
+    }
+  
+    .sidebar a::after { 
+      content: "";
+      position: absolute;
+      bottom: 5px;
+      left: 20px;
+      width: 0;
+      height: 2px;
+      background-color: #007bff;
+      transition: width 0.3s ease-in-out;
+    }
+  
+    .sidebar a:hover::after {
+      width: 50px;
+    }
+  
+    .content {
+      padding: 20px;
+    }
+  
+    /* NOVO CSS ADICIONADO */
+    .centralizar-formulario {
+      max-width: 500px;
+      margin: 0 auto;
+    }
+
+    .nav-tabs .nav-link {
+      color: #495057;
+    }
+
+    .nav-tabs .nav-link.active {
+      color: #007bff;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
+  <div class="container-fluid">
+    <a class="navbar-brand fw-bold" href="#">Odonto Vida - Admin</a>
+    <div class="ms-auto">
+      <a href="index.html" class="btn btn-outline-light" onclick="localStorage.clear()">Sair</a>
+    </div>
+  </div>
+</nav>
+
+<div class="container-fluid">
+  <div class="row">
+    <!-- Sidebar -->
+    <div class="col-md-2 sidebar">
+      <a onclick="carregarConteudo('visaoGeral')">Visão Geral</a>
+      <a onclick="carregarConteudo('admin')">Gerenciar Admin</a>
+      <a onclick="carregarConteudo('pacientes')">Gerenciar Pacientes</a>
+      <a onclick="carregarConteudo('funcionarios')">Gerenciar Funcionarios</a>
+      <a onclick="carregarConteudo('relatorios')">Relatórios</a>
+    </div>
+
+    <!-- Conteúdo -->
+    <div class="col-md-10 content">
+      <h2 id="saudacao-admin">Bem-vindo, nome!</h2>
+      <div id="conteudo-dinamico" class="mt-4"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Funções globais
+  const nome = localStorage.getItem("nomeAdmin");
+  if (nome) {
+    document.getElementById("saudacao-admin").innerText = `Bem-vindo, ${nome}!`;
+  }
+
+  // Função de listar pacientes movida para o escopo global
+  async function listarPacientes() {
+    console.log("Função listarPacientes chamada");
+    const pacienteList = document.getElementById("pacienteList");
+    
+    try {
+      const response = await fetch("http://localhost:8080/paciente/listar", {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Erro na requisição: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      let html = `
+        <h5>Pacientes Cadastrados</h5>
+        <table class="table table-bordered table-hover mt-3">
+          <thead class="table-light">
+            <tr>
+              <th>Nome</th>
+              <th>CPF</th>
+              <th>Data de Nascimento</th>
+              <th>Email</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      if (!data || data.length === 0) {
+        html += `
+          <tr>
+            <td colspan="5" class="text-center">Nenhum paciente cadastrado</td>
+          </tr>
+        `;
+      } else {
+        data.forEach(pac => {
+          html += `
+            <tr>
+              <td>${pac.nome || '-'}</td>
+              <td>${pac.cpf || '-'}</td>
+              <td>${pac.dataNascimento || '-'}</td>
+              <td>${pac.email || '-'}</td>
+              <td>
+                <button class="btn btn-warning btn-sm me-2" onclick="editarPaciente(${pac.id}, '${pac.nome || ''}', '${pac.cpf || ''}', '${pac.dataNascimento || ''}', '${pac.email || ''}')">Editar</button>
+                <button class="btn btn-danger btn-sm" onclick="deletarPaciente(${pac.id})">Excluir</button>
+              </td>
+            </tr>
+          `;
+        });
+      }
+
+      html += `</tbody></table>`;
+      pacienteList.innerHTML = html;
+    } catch (error) {
+      console.error("Erro ao listar pacientes:", error);
+      pacienteList.innerHTML = `
+        <div class="alert alert-danger" role="alert">
+          <h5>Erro ao buscar pacientes</h5>
+          <p>${error.message}</p>
+          <p>Por favor, verifique se o servidor está rodando e tente novamente.</p>
+        </div>
+      `;
+    }
+  }
+
+  // Função de carregar conteúdo
+  async function carregarConteudo(secao) {
+    const conteudo = document.getElementById("conteudo-dinamico");
+
+    if (secao === "visaoGeral") {
+      try {
+        // Buscar total de pacientes
+        const responsePacientes = await fetch("http://localhost:8080/paciente/listar", {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        });
+
+        // Buscar total de funcionários
+        const responseFuncionarios = await fetch("http://localhost:8080/funcionarios/listar", {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!responsePacientes.ok || !responseFuncionarios.ok) {
+          throw new Error("Erro ao buscar dados");
+        }
+
+        const pacientes = await responsePacientes.json();
+        const funcionarios = await responseFuncionarios.json();
+
+        conteudo.innerHTML = `
+          <div class="row">
+            <div class="col-md-6">
+              <div class="card shadow-sm">
+                <div class="card-body">
+                  <h5 class="card-title">Total de Pacientes</h5>
+                  <p class="card-text fs-4">${pacientes.length}</p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="card shadow-sm">
+                <div class="card-body">
+                  <h5 class="card-title">Total de Funcionários</h5>
+                  <p class="card-text fs-4">${funcionarios.length}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      } catch (error) {
+        console.error("Erro ao carregar dados:", error);
+        conteudo.innerHTML = `
+          <div class="alert alert-danger" role="alert">
+            <h5>Erro ao carregar dados</h5>
+            <p>Não foi possível carregar os dados da visão geral.</p>
+            <p>Por favor, verifique se o servidor está rodando e tente novamente.</p>
+          </div>
+        `;
+      }
+    }
+
+    if (secao === "admin") {
+      conteudo.innerHTML = `
+        <div class="mb-3">
+          <button class="btn btn-primary" onclick="listarAdmins()">Listar Administradores</button>
+          <button class="btn btn-success ms-2" onclick="document.getElementById('formAdmin').classList.toggle('d-none')">Criar Novo</button>
+        </div>
+
+        <div id="formAdmin" class="card p-3 shadow-sm d-none centralizar-formulario">
+          <div id="mensagemCriacao" class="alert d-none" role="alert"></div>
+          <div class="mb-2"><label class="form-label">Nome</label><input type="text" id="nome" class="form-control" required></div>
+          <div class="mb-2"><label class="form-label">Email</label><input type="email" id="email" class="form-control" required></div>
+          <div class="mb-2"><label class="form-label">Data de Nascimento</label><input type="date" id="dataNascimento" class="form-control" required></div>
+          <div class="mb-2"><label class="form-label">Senha</label><input type="password" id="senha" class="form-control" required></div>
+          <div class="mb-2"><label class="form-label">Confirmar Senha</label><input type="password" id="confirmarSenha" class="form-control" required></div>
+          <div class="text-center">
+            <button class="btn btn-success" onclick="criarAdmin()">Salvar</button>
+          </div>
+        </div>
+
+        <div class="mt-4" id="adminList"></div>
+      `;
+    }
+    if (secao === "funcionarios") {
+      conteudo.innerHTML = `
+        <div class="mb-3">
+          <button class="btn btn-primary" onclick="listarFuncionarios()">Listar Funcionários</button>
+          <button class="btn btn-success ms-2" onclick="document.getElementById('formFuncionario').classList.toggle('d-none')">Criar Novo</button>
+        </div>
+
+        <div id="formFuncionario" class="card p-3 shadow-sm d-none centralizar-formulario">
+          <div id="mensagemFuncionario" class="alert d-none" role="alert"></div>
+          <div class="mb-2"><label class="form-label">Nome</label><input type="text" id="funcNome" class="form-control" required></div>
+          <div class="mb-2"><label class="form-label">CPF</label><input type="text" id="funcCpf" class="form-control" required></div>
+          <div class="mb-2"><label class="form-label">CRO</label><input type="text" id="funcCro" class="form-control" required></div>
+          <div class="mb-2"><label class="form-label">Email</label><input type="email" id="funcEmail" class="form-control" required></div>
+          <div class="mb-2"><label class="form-label">Senha</label><input type="password" id="funcSenha" class="form-control" required></div>
+          <div class="text-center">
+            <button class="btn btn-success" onclick="criarFuncionario()">Salvar</button>
+          </div>
+        </div>
+
+        <div class="mt-4" id="funcionarioList"></div>
+      `;
+    }
+    if (secao === "pacientes") {
+      conteudo.innerHTML = `
+        <div class="mb-3">
+          <button class="btn btn-primary" onclick="listarPacientes()">Listar Pacientes</button>
+        </div>
+
+        <div class="mt-4" id="pacienteList"></div>
+      `;
+    }
+  }
+
+  async function listarAdmins() {
+    try {
+      const response = await fetch("http://localhost:8080/administrador/administradores");
+      const data = await response.json();
+
+      let html = `
+        <h5>Administradores Cadastrados</h5>
+        <table class="table table-bordered table-hover mt-3">
+          <thead class="table-light">
+            <tr>
+              <th>Nome</th>
+              <th>Email</th>
+              <th>Data de Nascimento</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      data.forEach(admin => {
+        html += `
+          <tr>
+            <td>${admin.nome}</td>
+            <td>${admin.email}</td>
+            <td>${admin.dataNascimento}</td>
+            <td>
+              <button class="btn btn-warning btn-sm me-2" onclick="editarAdmin(${admin.id}, '${admin.nome}', '${admin.email}', '${admin.dataNascimento}')">Editar</button>
+              <button class="btn btn-danger btn-sm" onclick="deletarAdmin(${admin.id})">Excluir</button>
+            </td>
+          </tr>
+        `;
+      });
+
+      html += `</tbody></table>`;
+      document.getElementById("adminList").innerHTML = html;
+    } catch (error) {
+      alert("Erro ao buscar administradores.");
+    }
+  }
+
+  function editarAdmin(id, nomeAtual, emailAtual, dataNascimentoAtual) {
+    document.getElementById("editarId").value = id;
+    document.getElementById("editarNome").value = nomeAtual;
+    document.getElementById("editarEmail").value = emailAtual;
+    document.getElementById("editarDataNascimento").value = dataNascimentoAtual;
+    document.getElementById("editarSenha").value = "";
+
+    const modal = new bootstrap.Modal(document.getElementById("modalEditarAdmin"));
+    modal.show();
+  }
+
+  function salvarEdicao() {
+    const id = document.getElementById("editarId").value;
+    const nome = document.getElementById("editarNome").value.trim();
+    const email = document.getElementById("editarEmail").value.trim();
+    const dataNascimento = document.getElementById("editarDataNascimento").value;
+    const senha = document.getElementById("editarSenha").value.trim();
+    const mensagemDiv = document.getElementById("mensagemEdicao");
+
+    // Limpa e esconde o campo de mensagem antes de validar
+    mensagemDiv.className = "alert d-none";
+    mensagemDiv.innerText = "";
+
+    if (!nome || !email || !dataNascimento) {
+      mensagemDiv.className = "alert alert-warning";
+      mensagemDiv.innerText = "Preencha todos os campos obrigatórios.";
+      return;
+    }
+
+    const idade = verificaMaiorDeIdade(dataNascimento);
+    if (idade < 18) {
+      mensagemDiv.className = "alert alert-danger";
+      mensagemDiv.innerText = "O administrador precisa ter pelo menos 18 anos.";
+      return;
+    }
+
+    const body = { nome, email, dataNascimento };
+    if (senha) body.senha = senha;
+
+    fetch(`http://localhost:8080/administrador/atualizar/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    })
+      .then(response => {
+        if (response.ok) {
+          mensagemDiv.className = "alert alert-success";
+          mensagemDiv.innerText = "Administrador atualizado com sucesso.";
+
+          // Aguarda 2 segundos e fecha o modal
+          setTimeout(() => {
+            bootstrap.Modal.getInstance(document.getElementById("modalEditarAdmin")).hide();
+            listarAdmins();
+          }, 2000);
+        } else {
+          mensagemDiv.className = "alert alert-danger";
+          mensagemDiv.innerText = "Erro ao atualizar administrador.";
+        }
+      })
+      .catch(() => {
+        mensagemDiv.className = "alert alert-danger";
+        mensagemDiv.innerText = "Erro de conexão com o servidor.";
+      });
+  }
+
+  function deletarAdmin(id) {
+    if (!confirm("Tem certeza que deseja excluir este administrador?")) return;
+
+    fetch(`http://localhost:8080/administrador/deletar/${id}`, {
+      method: "DELETE"
+    })
+    .then(response => {
+      if (response.ok) {
+        alert("Administrador excluído com sucesso.");
+        listarAdmins();
+      } else {
+        alert("Erro ao excluir administrador.");
+      }
+    })
+    .catch(() => alert("Erro de conexão com o servidor."));
+  }
+
+  function verificaMaiorDeIdade(dataNascimento) {
+    const hoje = new Date();
+    const nascimento = new Date(dataNascimento);
+    let idade = hoje.getFullYear() - nascimento.getFullYear();
+    const mes = hoje.getMonth() - nascimento.getMonth();
+
+    if (mes < 0 || (mes === 0 && hoje.getDate() < nascimento.getDate())) {
+      idade--;
+    }
+    return idade;
+  }
+
+  async function criarAdmin() {
+    const nome = document.getElementById("nome").value.trim();
+    const email = document.getElementById("email").value.trim();
+    const dataNascimento = document.getElementById("dataNascimento").value;
+    const senha = document.getElementById("senha").value;
+    const confirmarSenha = document.getElementById("confirmarSenha").value;
+    const mensagemCriacao = document.getElementById("mensagemCriacao");
+
+    // Limpa e esconde a mensagem antes de validar
+    mensagemCriacao.className = "alert d-none";
+    mensagemCriacao.innerText = "";
+
+    if (!nome || !email || !dataNascimento || !senha || !confirmarSenha) {
+      mensagemCriacao.className = "alert alert-warning";
+      mensagemCriacao.innerText = "Todos os campos devem ser preenchidos!";
+      return;
+    }
+
+    const idade = verificaMaiorDeIdade(dataNascimento);
+    if (idade < 18) {
+      mensagemCriacao.className = "alert alert-danger";
+      mensagemCriacao.innerText = "O administrador precisa ter pelo menos 18 anos.";
+      return;
+    }
+
+    if (senha !== confirmarSenha) {
+      mensagemCriacao.className = "alert alert-danger";
+      mensagemCriacao.innerText = "As senhas não coincidem!";
+      return;
+    }
+
+    const body = { nome, email, dataNascimento, senha };
+
+    try {
+      const response = await fetch("http://localhost:8080/administrador/criar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+
+      if (response.ok) {
+        mensagemCriacao.className = "alert alert-success";
+        mensagemCriacao.innerText = "Administrador criado com sucesso!";
+
+        document.getElementById("nome").value = "";
+        document.getElementById("email").value = "";
+        document.getElementById("dataNascimento").value = "";
+        document.getElementById("senha").value = "";
+        document.getElementById("confirmarSenha").value = "";
+
+        setTimeout(() => {
+          document.getElementById("formAdmin").classList.add("d-none");
+          mensagemCriacao.className = "alert d-none";
+          listarAdmins();
+        }, 2000);
+      } else {
+        const erro = await response.text();
+        mensagemCriacao.className = "alert alert-danger";
+        mensagemCriacao.innerText = "Erro ao criar administrador: " + erro;
+      }
+    } catch (error) {
+      mensagemCriacao.className = "alert alert-danger";
+      mensagemCriacao.innerText = "Erro de conexão com o servidor.";
+    }
+  }
+
+  async function criarFuncionario() {
+    const nome = document.getElementById("funcNome").value.trim();
+    const cpf = document.getElementById("funcCpf").value.trim();
+    const cro = document.getElementById("funcCro").value.trim();
+    const email = document.getElementById("funcEmail").value.trim();
+    const senha = document.getElementById("funcSenha").value.trim();
+    const mensagem = document.getElementById("mensagemFuncionario");
+
+    mensagem.className = "alert d-none";
+    mensagem.innerText = "";
+
+    if (!nome || !cpf || !cro || !email || !senha) {
+      mensagem.className = "alert alert-warning";
+      mensagem.innerText = "Todos os campos devem ser preenchidos!";
+      return;
+    }
+
+    const body = { nome, cpf, cro, email, senha };
+
+    try {
+      const response = await fetch("http://localhost:8080/funcionarios/criar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+
+      if (response.ok) {
+        mensagem.className = "alert alert-success";
+        mensagem.innerText = "Funcionário cadastrado com sucesso!";
+        document.getElementById("funcNome").value = "";
+        document.getElementById("funcCpf").value = "";
+        document.getElementById("funcCro").value = "";
+        document.getElementById("funcEmail").value = "";
+        document.getElementById("funcSenha").value = "";
+      } else {
+        const erro = await response.text();
+        mensagem.className = "alert alert-danger";
+        mensagem.innerText = `Erro: ${erro}`;
+      }
+    } catch (e) {
+      mensagem.className = "alert alert-danger";
+      mensagem.innerText = "Erro de conexão com o servidor.";
+    }
+  }
+
+  async function listarFuncionarios() {
+    try {
+      const response = await fetch("http://localhost:8080/funcionarios/listar");
+      const data = await response.json();
+
+      let html = `
+        <h5>Funcionários Cadastrados</h5>
+        <table class="table table-bordered table-hover mt-3">
+          <thead class="table-light">
+            <tr>
+              <th>Nome</th>
+              <th>CPF</th>
+              <th>CRO</th>
+              <th>Email</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      data.forEach(func => {
+        html += `
+          <tr>
+            <td>${func.nome}</td>
+            <td>${func.cpf}</td>
+            <td>${func.cro}</td>
+            <td>${func.email}</td>
+            <td>
+              <button class="btn btn-warning btn-sm me-2" onclick="editarFuncionario(${func.id}, '${func.nome}', '${func.cpf}', '${func.cro}', '${func.email}')">Editar</button>
+              <button class="btn btn-danger btn-sm" onclick="deletarFuncionario(${func.id})">Excluir</button>
+            </td>
+          </tr>
+        `;
+      });
+
+      html += `</tbody></table>`;
+      document.getElementById("funcionarioList").innerHTML = html;
+    } catch (error) {
+      alert("Erro ao buscar funcionários.");
+    }
+  }
+
+  function editarFuncionario(id, nome, cpf, cro, email) {
+    document.getElementById("funcEditarId").value = id;
+    document.getElementById("funcEditarNome").value = nome;
+    document.getElementById("funcEditarCpf").value = cpf;
+    document.getElementById("funcEditarCro").value = cro;
+    document.getElementById("funcEditarEmail").value = email;
+    document.getElementById("funcEditarSenha").value = "";
+
+    const modal = new bootstrap.Modal(document.getElementById("modalEditarFuncionario"));
+    modal.show();
+  }
+
+  async function salvarEdicaoFuncionario() {
+    const id = document.getElementById("funcEditarId").value;
+    const nome = document.getElementById("funcEditarNome").value.trim();
+    const cpf = document.getElementById("funcEditarCpf").value.trim();
+    const cro = document.getElementById("funcEditarCro").value.trim();
+    const email = document.getElementById("funcEditarEmail").value.trim();
+    const senha = document.getElementById("funcEditarSenha").value.trim();
+    const mensagem = document.getElementById("mensagemEdicaoFuncionario");
+
+    mensagem.className = "alert d-none";
+    mensagem.innerText = "";
+
+    if (!nome || !cpf || !cro || !email) {
+      mensagem.className = "alert alert-warning";
+      mensagem.innerText = "Todos os campos obrigatórios devem ser preenchidos.";
+      return;
+    }
+
+    const body = { nome, cpf, cro, email };
+    if (senha) body.senha = senha;
+
+    try {
+      const response = await fetch(`http://localhost:8080/funcionarios/atualizar/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+
+      if (response.ok) {
+        mensagem.className = "alert alert-success";
+        mensagem.innerText = "Funcionário atualizado com sucesso!";
+        setTimeout(() => {
+          bootstrap.Modal.getInstance(document.getElementById("modalEditarFuncionario")).hide();
+          listarFuncionarios();
+        }, 2000);
+      } else {
+        const erro = await response.text();
+        mensagem.className = "alert alert-danger";
+        mensagem.innerText = "Erro ao atualizar: " + erro;
+      }
+    } catch (e) {
+      mensagem.className = "alert alert-danger";
+      mensagem.innerText = "Erro de conexão com o servidor.";
+    }
+  }
+
+  async function deletarFuncionario(id) {
+    if (!confirm("Tem certeza que deseja excluir este funcionário?")) return;
+
+    try {
+      const response = await fetch(`http://localhost:8080/funcionarios/deletar/${id}`, {
+        method: "DELETE"
+      });
+
+      if (response.ok) {
+        alert("Funcionário excluído com sucesso!");
+        listarFuncionarios();
+      } else {
+        alert("Erro ao excluir funcionário.");
+      }
+    } catch (error) {
+      alert("Erro de conexão com o servidor.");
+    }
+  }
+
+  async function editarPaciente(id, nome, cpf, dataNascimento, email) {
+    document.getElementById("pacEditarId").value = id;
+    document.getElementById("pacEditarNome").value = nome;
+    document.getElementById("pacEditarCpf").value = cpf;
+    document.getElementById("pacEditarDataNascimento").value = dataNascimento;
+    document.getElementById("pacEditarEmail").value = email;
+    document.getElementById("pacEditarSenha").value = "********";
+
+    const modal = new bootstrap.Modal(document.getElementById("modalEditarPaciente"));
+    modal.show();
+  }
+
+  function verificaIdadeMinima(dataNascimento, idadeMinima) {
+    const hoje = new Date();
+    const nascimento = new Date(dataNascimento);
+    let idade = hoje.getFullYear() - nascimento.getFullYear();
+    const mes = hoje.getMonth() - nascimento.getMonth();
+
+    if (mes < 0 || (mes === 0 && hoje.getDate() < nascimento.getDate())) {
+      idade--;
+    }
+    return idade >= idadeMinima;
+  }
+
+  async function salvarEdicaoPaciente() {
+    const id = document.getElementById("pacEditarId").value;
+    const nome = document.getElementById("pacEditarNome").value.trim();
+    const cpf = document.getElementById("pacEditarCpf").value.trim();
+    const dataNascimento = document.getElementById("pacEditarDataNascimento").value;
+    const email = document.getElementById("pacEditarEmail").value.trim();
+    const mensagem = document.getElementById("mensagemEdicaoPaciente");
+
+    mensagem.className = "alert d-none";
+    mensagem.innerText = "";
+
+    if (!nome || !cpf || !dataNascimento || !email) {
+      mensagem.className = "alert alert-warning";
+      mensagem.innerText = "Todos os campos obrigatórios devem ser preenchidos.";
+      return;
+    }
+
+    // Verificar idade mínima (14 anos)
+    if (!verificaIdadeMinima(dataNascimento, 14)) {
+      mensagem.className = "alert alert-danger";
+      mensagem.innerText = "O paciente deve ter pelo menos 14 anos de idade.";
+      return;
+    }
+
+    // Primeiro, verificar se o CPF já existe (exceto para o próprio paciente)
+    try {
+      const response = await fetch("http://localhost:8080/paciente/listar", {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error("Erro ao verificar CPF");
+      }
+
+      const pacientes = await response.json();
+      const cpfExistente = pacientes.find(p => 
+        p.cpf === cpf && p.id !== parseInt(id)
+      );
+
+      if (cpfExistente) {
+        mensagem.className = "alert alert-danger";
+        mensagem.innerText = "Este CPF já está cadastrado para outro paciente.";
+        return;
+      }
+
+      // Se o CPF não existe, prosseguir com a atualização
+      const body = { nome, cpf, dataNascimento, email };
+
+      const updateResponse = await fetch(`http://localhost:8080/paciente/atualizar/${id}`, {
+        method: "PUT",
+        headers: { 
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+
+      if (updateResponse.ok) {
+        mensagem.className = "alert alert-success";
+        mensagem.innerText = "Paciente atualizado com sucesso!";
+        setTimeout(() => {
+          bootstrap.Modal.getInstance(document.getElementById("modalEditarPaciente")).hide();
+          listarPacientes();
+        }, 2000);
+      } else {
+        const erro = await updateResponse.text();
+        mensagem.className = "alert alert-danger";
+        mensagem.innerText = "Erro ao atualizar: " + erro;
+      }
+    } catch (e) {
+      console.error("Erro:", e);
+      mensagem.className = "alert alert-danger";
+      mensagem.innerText = "Erro de conexão com o servidor.";
+    }
+  }
+
+  async function deletarPaciente(id) {
+    if (!confirm("Tem certeza que deseja excluir este paciente?")) return;
+
+    try {
+      const response = await fetch(`http://localhost:8080/paciente/deletar/${id}`, {
+        method: "DELETE",
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        alert("Paciente excluído com sucesso!");
+        listarPacientes();
+      } else {
+        alert("Erro ao excluir paciente.");
+      }
+    } catch (error) {
+      alert("Erro de conexão com o servidor.");
+    }
+  }
+
+  // Inicialização
+  window.onload = () => carregarConteudo('visaoGeral');
+</script>
+
+<script>
+  window.addEventListener("DOMContentLoaded", function () {
+    document.getElementById("login-form-admin")?.addEventListener("submit", async function (e) {
+      e.preventDefault();
+
+      const email = document.getElementById("email").value.trim();
+      const senha = document.getElementById("senha").value.trim();
+      const erroDiv = document.getElementById("mensagemErro");
+      erroDiv.classList.add("d-none");
+
+      try {
+        const response = await fetch("http://localhost:8080/administrador/administradores");
+
+        if (!response.ok) {
+          erroDiv.textContent = "Erro ao buscar administradores.";
+          erroDiv.classList.remove("d-none");
+          return;
+        }
+
+        const admins = await response.json();
+
+        const adminValido = admins.find(adm =>
+          adm.email === email && adm.senha === senha
+        );
+
+        if (adminValido) {
+          localStorage.setItem("nomeAdmin", adminValido.nome);
+          window.location.href = "dashboard.html";
+        } else {
+          erroDiv.textContent = "Usuário ou senha inválidos.";
+          erroDiv.classList.remove("d-none");
+        }
+      } catch (err) {
+        erroDiv.textContent = "Erro de conexão com o servidor.";
+        erroDiv.classList.remove("d-none");
+      }
+    });
+  });
+</script>
+
+<!-- MODAL DE EDIÇÃO ADICIONADO AO FINAL DO BODY -->
+<div class="modal fade" id="modalEditarAdmin" tabindex="-1" aria-labelledby="modalEditarAdminLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalEditarAdminLabel">Editar Administrador</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <div id="mensagemEdicao" class="alert d-none" role="alert"></div>
+      
+        <input type="hidden" id="editarId">
+        <div class="mb-3">
+          <label class="form-label">Nome</label>
+          <input type="text" class="form-control" id="editarNome">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Email</label>
+          <input type="email" class="form-control" id="editarEmail">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Data de Nascimento</label>
+          <input type="date" class="form-control" id="editarDataNascimento">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Nova Senha (opcional)</label>
+          <input type="password" class="form-control" id="editarSenha">
+        </div>
+      </div>
+      
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="salvarEdicao()">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DE EDIÇÃO DE FUNCIONÁRIO -->
+<div class="modal fade" id="modalEditarFuncionario" tabindex="-1" aria-labelledby="modalEditarFuncionarioLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Editar Funcionário</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <div id="mensagemEdicaoFuncionario" class="alert d-none" role="alert"></div>
+        <input type="hidden" id="funcEditarId">
+        <div class="mb-2"><label>Nome</label><input id="funcEditarNome" type="text" class="form-control"></div>
+        <div class="mb-2"><label>CPF</label><input id="funcEditarCpf" type="text" class="form-control"></div>
+        <div class="mb-2"><label>CRO</label><input id="funcEditarCro" type="text" class="form-control"></div>
+        <div class="mb-2"><label>Email</label><input id="funcEditarEmail" type="email" class="form-control"></div>
+        <div class="mb-2"><label>Nova Senha (opcional)</label><input id="funcEditarSenha" type="password" class="form-control"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="salvarEdicaoFuncionario()">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DE EDIÇÃO DE PACIENTE -->
+<div class="modal fade" id="modalEditarPaciente" tabindex="-1" aria-labelledby="modalEditarPacienteLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Editar Paciente</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <div id="mensagemEdicaoPaciente" class="alert d-none" role="alert"></div>
+        <input type="hidden" id="pacEditarId">
+        <div class="mb-2">
+          <label>Nome</label>
+          <input id="pacEditarNome" type="text" class="form-control">
+        </div>
+        <div class="mb-2">
+          <label>CPF</label>
+          <input id="pacEditarCpf" type="text" class="form-control">
+        </div>
+        <div class="mb-2">
+          <label>Data de Nascimento</label>
+          <input id="pacEditarDataNascimento" type="date" class="form-control">
+        </div>
+        <div class="mb-2">
+          <label>Email</label>
+          <input id="pacEditarEmail" type="email" class="form-control">
+        </div>
+        <div class="mb-2">
+          <label>Senha</label>
+          <input id="pacEditarSenha" type="password" class="form-control" readonly disabled style="background-color: #e9ecef;">
+          <small class="text-muted">A senha não pode ser visualizada ou alterada por questões de segurança.</small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="salvarEdicaoPaciente()">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bootstrap JS necessário para funcionar o modal -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+</body>
+</html>

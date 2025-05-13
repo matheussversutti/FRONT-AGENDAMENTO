@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Login/Cadastro - Paciente</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background-color: #f8f9fa;
+      padding-top: 70px;
+    }
+    .card-login {
+      max-width: 400px;
+      margin: 0 auto;
+      padding: 30px;
+      box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+      border-radius: 15px;
+      background-color: white;
+    }
+    .avatar {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background-color: #007bff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 30px;
+      margin: 0 auto 15px auto;
+    }
+    .hidden {
+      display: none;
+    }
+    .link-cadastro {
+      display: block;
+      text-align: center;
+      margin-top: 10px;
+      color: #007bff;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
+  <div class="container">
+    <a class="navbar-brand fw-bold text-white" href="index.html">Odonto Vida</a>
+  </div>
+</nav>
+
+<div class="container mt-5">
+  <div class="card-login">
+    <div class="avatar">🦷</div>
+    <h4 class="text-center mb-4" id="tituloFormulario">Login do Paciente</h4>
+    
+    <form id="formPaciente">
+      <div id="campoNome" class="mb-3 hidden">
+        <label for="nome" class="form-label">Nome:</label>
+        <input type="text" class="form-control" id="nome">
+      </div>
+      <div id="campoCpf" class="mb-3 hidden">
+        <label for="cpf" class="form-label">CPF:</label>
+        <input type="text" class="form-control" id="cpf">
+      </div>
+      <div id="campoDataNascimento" class="mb-3 hidden">
+        <label for="dataNascimento" class="form-label">Data de Nascimento:</label>
+        <input type="date" class="form-control" id="dataNascimento">
+      </div>
+      <div class="mb-3">
+        <label for="email" class="form-label">E-mail:</label>
+        <input type="email" class="form-control" id="email" required>
+      </div>
+      <div class="mb-3">
+        <label for="senha" class="form-label">Senha:</label>
+        <input type="password" class="form-control" id="senha" required>
+      </div>
+      <button type="submit" class="btn btn-primary w-100" id="btnSubmit">Entrar</button>
+      <span id="linkAlternar" class="link-cadastro">Não tem cadastro? Cadastre-se agora</span>
+      <div id="mensagemErro" class="alert alert-danger mt-3 d-none" role="alert"></div>
+      <div id="mensagemSucesso" class="alert alert-success mt-3 d-none" role="alert"></div>
+    </form>
+  </div>
+</div>
+
+<script>
+  const form = document.getElementById("formPaciente");
+  const campoNome = document.getElementById("campoNome");
+  const campoCpf = document.getElementById("campoCpf");
+  const campoDataNascimento = document.getElementById("campoDataNascimento");
+  const erroDiv = document.getElementById("mensagemErro");
+  const sucessoDiv = document.getElementById("mensagemSucesso");
+  const btnSubmit = document.getElementById("btnSubmit");
+  const linkAlternar = document.getElementById("linkAlternar");
+  const tituloFormulario = document.getElementById("tituloFormulario");
+
+  let modoCadastro = false;
+
+  linkAlternar.addEventListener("click", () => {
+    modoCadastro = !modoCadastro;
+
+    campoNome.classList.toggle("hidden", !modoCadastro);
+    campoCpf.classList.toggle("hidden", !modoCadastro);
+    campoDataNascimento.classList.toggle("hidden", !modoCadastro);
+
+    if (modoCadastro) {
+      btnSubmit.textContent = "Cadastrar";
+      tituloFormulario.textContent = "Cadastro de Paciente";
+      linkAlternar.textContent = "Já tem conta? Faça login";
+    } else {
+      btnSubmit.textContent = "Entrar";
+      tituloFormulario.textContent = "Login do Paciente";
+      linkAlternar.textContent = "Não tem cadastro? Cadastre-se agora";
+    }
+
+    erroDiv.classList.add("d-none");
+    sucessoDiv.classList.add("d-none");
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    erroDiv.classList.add("d-none");
+    sucessoDiv.classList.add("d-none");
+
+    const email = document.getElementById("email").value.trim();
+    const senha = document.getElementById("senha").value.trim();
+    const nome = document.getElementById("nome").value.trim();
+    const cpf = document.getElementById("cpf").value.trim();
+    const dataNascimento = document.getElementById("dataNascimento").value;
+
+    try {
+      if (!modoCadastro) {
+        const loginDTO = { email, senha };
+        const response = await fetch("http://localhost:8080/paciente/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(loginDTO)
+        });
+
+        if (response.ok) {
+          const paciente = await response.json();
+          localStorage.setItem("nomePaciente", paciente.nome);
+          localStorage.setItem("emailPaciente", paciente.email);
+          localStorage.setItem("idPaciente", paciente.id);
+          window.location.href = "dashboard-paciente.html";
+        } else {
+          const msg = await response.text();
+          erroDiv.textContent = msg || "E-mail ou senha inválidos.";
+          erroDiv.classList.remove("d-none");
+        }
+
+      } else {
+        if (!nome || !cpf || !email || !senha || !dataNascimento) {
+          erroDiv.textContent = "Todos os campos devem ser preenchidos para cadastro.";
+          erroDiv.classList.remove("d-none");
+          return;
+        }
+
+        const dataNasc = new Date(dataNascimento);
+        const hoje = new Date();
+        const idade = hoje.getFullYear() - dataNasc.getFullYear();
+        const mes = hoje.getMonth() - dataNasc.getMonth();
+        const dia = hoje.getDate() - dataNasc.getDate();
+        const idadeFinal = mes < 0 || (mes === 0 && dia < 0) ? idade - 1 : idade;
+
+        if (idadeFinal < 14) {
+          erroDiv.textContent = "O paciente deve ter pelo menos 14 anos para se cadastrar.";
+          erroDiv.classList.remove("d-none");
+          return;
+        }
+
+        const novoPaciente = { nome, email, senha, cpf, dataNascimento };
+        const resp = await fetch("http://localhost:8080/paciente/criar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(novoPaciente)
+        });
+
+        if (resp.ok) {
+          // Resetar campos
+          document.getElementById("nome").value = "";
+          document.getElementById("cpf").value = "";
+          document.getElementById("dataNascimento").value = "";
+          document.getElementById("email").value = "";
+          document.getElementById("senha").value = "";
+
+          // Alternar para login antes de mostrar mensagem
+          linkAlternar.click();
+
+          // Exibir mensagem após alternar
+          setTimeout(() => {
+            sucessoDiv.textContent = "🎉 Paciente cadastrado com sucesso! Faça seu login acima.";
+            sucessoDiv.classList.remove("d-none");
+            sucessoDiv.scrollIntoView({ behavior: "smooth" });
+          }, 150);
+        } else {
+          const msg = await resp.text();
+          erroDiv.textContent = msg || "Erro ao cadastrar paciente.";
+          erroDiv.classList.remove("d-none");
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      erroDiv.textContent = "Erro de conexão com o servidor.";
+      erroDiv.classList.remove("d-none");
+    }
+  });
+</script>
+
+</body>
+</html>
