@@ -4,16 +4,21 @@
   <meta charset="UTF-8">
   <title>Dashboard - Administrador</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦷</text></svg>">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
       padding-top: 70px;
+      background-color: #f8f9fa;
     }
   
     .sidebar {
-      background-color: #f8f9fa;
+      background-color: #fff;
       height: 100vh;
       padding-top: 20px;
+      box-shadow: 2px 0 5px rgba(0,0,0,0.05);
     }
   
     .sidebar a {
@@ -23,10 +28,12 @@
       text-decoration: none;
       cursor: pointer;
       position: relative;
+      transition: all 0.2s ease-in-out;
     }
   
-    .sidebar a:hover {
-      background-color: #e9ecef;
+    .sidebar a:hover,
+    .sidebar a.active {
+      color: #007bff;
     }
   
     .sidebar a::after { 
@@ -47,7 +54,55 @@
     .content {
       padding: 20px;
     }
-  
+
+    .card {
+      border: none;
+      border-radius: 15px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+      transition: transform 0.2s ease-in-out;
+      background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+      color: white;
+    }
+
+    .card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 6px 12px rgba(13, 110, 253, 0.2);
+    }
+
+    .card-title {
+      color: rgba(255, 255, 255, 0.9);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 1rem;
+    }
+
+    .card-text {
+      font-size: 2.5rem;
+      font-weight: 600;
+      color: white;
+      margin: 0;
+    }
+
+    .card-subtitle {
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 0.9rem;
+    }
+
+    .saudacao {
+      color: #2c3e50;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 2px solid #e9ecef;
+    }
+
+    .saudacao i {
+      color: #0d6efd;
+      margin-right: 10px;
+    }
+
     /* NOVO CSS ADICIONADO */
     .centralizar-formulario {
       max-width: 500px;
@@ -61,6 +116,12 @@
     .nav-tabs .nav-link.active {
       color: #007bff;
       font-weight: 500;
+    }
+
+    .divisor-secao {
+      border-bottom: 2px solid #e9ecef;
+      margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
     }
   </style>
 </head>
@@ -80,11 +141,21 @@
   <div class="row">
     <!-- Sidebar -->
     <div class="col-md-2 sidebar">
-      <a onclick="carregarConteudo('visaoGeral')">Visão Geral</a>
-      <a onclick="carregarConteudo('admin')">Gerenciar Admin</a>
-      <a onclick="carregarConteudo('pacientes')">Gerenciar Pacientes</a>
-      <a onclick="carregarConteudo('funcionarios')">Gerenciar Funcionarios</a>
-      <a onclick="carregarConteudo('relatorios')">Relatórios</a>
+      <a onclick="carregarConteudo('visaoGeral', this)" class="active">
+        <i class="fas fa-chart-line"></i> Visão Geral
+      </a>
+      <a onclick="carregarConteudo('admin', this)">
+        <i class="fas fa-user-shield"></i> Gerenciar Admin
+      </a>
+      <a onclick="carregarConteudo('pacientes', this)">
+        <i class="fas fa-users"></i> Gerenciar Pacientes
+      </a>
+      <a onclick="carregarConteudo('funcionarios', this)">
+        <i class="fas fa-user-md"></i> Gerenciar Funcionários
+      </a>
+      <a onclick="carregarConteudo('relatorios', this)">
+        <i class="fas fa-file-alt"></i> Relatórios
+      </a>
     </div>
 
     <!-- Conteúdo -->
@@ -175,7 +246,17 @@
   }
 
   // Função de carregar conteúdo
-  async function carregarConteudo(secao) {
+  async function carregarConteudo(secao, linkElement) {
+    // Remove active class from all links
+    document.querySelectorAll('.sidebar a').forEach(link => {
+      link.classList.remove('active');
+    });
+    
+    // Add active class to clicked link
+    if (linkElement) {
+      linkElement.classList.add('active');
+    }
+
     const conteudo = document.getElementById("conteudo-dinamico");
 
     if (secao === "visaoGeral") {
@@ -198,28 +279,120 @@
           }
         });
 
-        if (!responsePacientes.ok || !responseFuncionarios.ok) {
+        // Buscar consultas
+        const responseConsultas = await fetch("http://localhost:8080/consultas/listar", {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!responsePacientes.ok || !responseFuncionarios.ok || !responseConsultas.ok) {
           throw new Error("Erro ao buscar dados");
         }
 
         const pacientes = await responsePacientes.json();
         const funcionarios = await responseFuncionarios.json();
+        const consultas = await responseConsultas.json();
+
+        // Calcular indicadores de agendamento
+        const hoje = new Date().toISOString().split('T')[0];
+        const consultasHoje = consultas.filter(c => c.data === hoje && c.status !== 'CANCELADA').length;
+        
+        // Próximas 7 consultas
+        const proximasConsultas = consultas
+          .filter(c => c.data >= hoje && c.status !== 'CANCELADA')
+          .sort((a, b) => new Date(a.data + 'T' + a.horario) - new Date(b.data + 'T' + b.horario))
+          .slice(0, 7);
+
+        // Calcular taxa de ocupação (considerando 8 horas de trabalho, 1 hora por consulta)
+        const horarioInicio = 8; // 8:00
+        const horarioFim = 18; // 18:00
+        const totalSlots = horarioFim - horarioInicio; // 1 slot por hora
+        const taxaOcupacao = ((consultasHoje / totalSlots) * 100).toFixed(1);
 
         conteudo.innerHTML = `
+          <div class="divisor-secao"></div>
           <div class="row">
-            <div class="col-md-6">
-              <div class="card shadow-sm">
+            <div class="col-md-6 mb-4">
+              <div class="card h-100">
                 <div class="card-body">
-                  <h5 class="card-title">Total de Pacientes</h5>
-                  <p class="card-text fs-4">${pacientes.length}</p>
+                  <h5 class="card-title">
+                    <i class="fas fa-users"></i>
+                    Total de Pacientes
+                  </h5>
+                  <p class="card-text">${pacientes.length}</p>
+                  <p class="card-subtitle">Pacientes cadastrados no sistema</p>
                 </div>
               </div>
             </div>
-            <div class="col-md-6">
-              <div class="card shadow-sm">
+            <div class="col-md-6 mb-4">
+              <div class="card h-100">
                 <div class="card-body">
-                  <h5 class="card-title">Total de Funcionários</h5>
-                  <p class="card-text fs-4">${funcionarios.length}</p>
+                  <h5 class="card-title">
+                    <i class="fas fa-user-md"></i>
+                    Total de Funcionários
+                  </h5>
+                  <p class="card-text">${funcionarios.length}</p>
+                  <p class="card-subtitle">Profissionais ativos na clínica</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <h5 class="mt-4 mb-3 text-muted">Indicadores de Agendamento</h5>
+          <div class="row">
+            <div class="col-md-4 mb-4">
+              <div class="card h-100">
+                <div class="card-body">
+                  <h5 class="card-title">
+                    <i class="fas fa-calendar-day"></i>
+                    Consultas Hoje
+                  </h5>
+                  <p class="card-text">${consultasHoje}</p>
+                  <p class="card-subtitle">Consultas agendadas para hoje</p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4 mb-4">
+              <div class="card h-100">
+                <div class="card-body">
+                  <h5 class="card-title">
+                    <i class="fas fa-calendar-week"></i>
+                    Próximas Consultas
+                  </h5>
+                  <div class="list-group list-group-flush bg-transparent">
+                    ${proximasConsultas.map(consulta => `
+                      <div class="list-group-item bg-transparent border-0 px-0 py-1">
+                        <small class="text-white-50">${consulta.data} ${consulta.horario}</small>
+                        <div class="d-flex justify-content-between align-items-center">
+                          <span class="text-white">${consulta.nome}</span>
+                          <span class="badge bg-white text-primary">${consulta.servico}</span>
+                        </div>
+                      </div>
+                    `).join('')}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4 mb-4">
+              <div class="card h-100">
+                <div class="card-body">
+                  <h5 class="card-title">
+                    <i class="fas fa-chart-line"></i>
+                    Taxa de Ocupação
+                  </h5>
+                  <p class="card-text">${taxaOcupacao}%</p>
+                  <p class="card-subtitle">Ocupação da agenda de hoje (slots de 1 hora)</p>
+                  <div class="progress mt-2" style="height: 5px;">
+                    <div class="progress-bar bg-white" role="progressbar" 
+                         style="width: ${taxaOcupacao}%" 
+                         aria-valuenow="${taxaOcupacao}" 
+                         aria-valuemin="0" 
+                         aria-valuemax="100">
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -240,55 +413,356 @@
     if (secao === "admin") {
       conteudo.innerHTML = `
         <div class="mb-3">
-          <button class="btn btn-primary" onclick="listarAdmins()">Listar Administradores</button>
-          <button class="btn btn-success ms-2" onclick="document.getElementById('formAdmin').classList.toggle('d-none')">Criar Novo</button>
+          <div class="input-group">
+            <input type="search" id="pesquisaAdmin" class="form-control" placeholder="Pesquisar por nome..." onkeyup="filtrarAdmins()" autocomplete="off">
+            <span class="input-group-text"><i class="fas fa-search"></i></span>
+            <button class="btn btn-success" onclick="document.getElementById('formAdmin').classList.toggle('d-none')">
+              <i class="fas fa-plus"></i> Novo
+            </button>
+          </div>
         </div>
 
-        <div id="formAdmin" class="card p-3 shadow-sm d-none centralizar-formulario">
-          <div id="mensagemCriacao" class="alert d-none" role="alert"></div>
-          <div class="mb-2"><label class="form-label">Nome</label><input type="text" id="nome" class="form-control" required></div>
-          <div class="mb-2"><label class="form-label">Email</label><input type="email" id="email" class="form-control" required></div>
-          <div class="mb-2"><label class="form-label">Data de Nascimento</label><input type="date" id="dataNascimento" class="form-control" required></div>
-          <div class="mb-2"><label class="form-label">Senha</label><input type="password" id="senha" class="form-control" required></div>
-          <div class="mb-2"><label class="form-label">Confirmar Senha</label><input type="password" id="confirmarSenha" class="form-control" required></div>
-          <div class="text-center">
-            <button class="btn btn-success" onclick="criarAdmin()">Salvar</button>
+        <div id="formAdmin" class="card shadow-sm d-none mb-4">
+          <div class="card-header bg-primary text-white">
+            <h5 class="card-title mb-0">
+              <i class="fas fa-user-shield me-2"></i>Novo Administrador
+            </h5>
+          </div>
+          <div class="card-body">
+            <div id="mensagemCriacao" class="alert d-none mb-4" role="alert"></div>
+            
+            <form class="row g-3">
+              <div class="col-md-6">
+                <div class="form-floating mb-3">
+                  <input type="text" id="nome" class="form-control" placeholder="Digite o nome completo" required>
+                  <label for="nome"><i class="fas fa-user me-2"></i>Nome Completo</label>
+                </div>
+              </div>
+              
+              <div class="col-md-6">
+                <div class="form-floating mb-3">
+                  <input type="email" id="email" class="form-control" placeholder="Digite o email" required>
+                  <label for="email"><i class="fas fa-envelope me-2"></i>Email</label>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <div class="form-floating mb-3">
+                  <input type="date" id="dataNascimento" class="form-control" placeholder="Selecione a data de nascimento" required>
+                  <label for="dataNascimento"><i class="fas fa-calendar me-2"></i>Data de Nascimento</label>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <div class="form-floating mb-3">
+                  <input type="password" id="senha" class="form-control" placeholder="Digite a senha" required>
+                  <label for="senha"><i class="fas fa-lock me-2"></i>Senha</label>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <div class="form-floating mb-3">
+                  <input type="password" id="confirmarSenha" class="form-control" placeholder="Confirme a senha" required>
+                  <label for="confirmarSenha"><i class="fas fa-lock me-2"></i>Confirmar Senha</label>
+                </div>
+              </div>
+
+              <div class="col-12 text-end">
+                <button type="button" class="btn btn-secondary me-2" onclick="document.getElementById('formAdmin').classList.add('d-none')">
+                  <i class="fas fa-times me-2"></i>Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="criarAdmin()">
+                  <i class="fas fa-save me-2"></i>Salvar
+                </button>
+              </div>
+            </form>
           </div>
         </div>
 
         <div class="mt-4" id="adminList"></div>
       `;
+      // Listar admins automaticamente
+      listarAdmins();
     }
     if (secao === "funcionarios") {
       conteudo.innerHTML = `
         <div class="mb-3">
-          <button class="btn btn-primary" onclick="listarFuncionarios()">Listar Funcionários</button>
-          <button class="btn btn-success ms-2" onclick="document.getElementById('formFuncionario').classList.toggle('d-none')">Criar Novo</button>
+          <div class="input-group">
+            <input type="search" 
+              id="pesquisaFuncionario" 
+              name="search-funcionario-${Date.now()}" 
+              class="form-control" 
+              placeholder="Pesquisar por nome ou CPF..." 
+              onkeyup="filtrarFuncionarios()" 
+              autocomplete="new-password"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
+              readonly
+              onfocus="this.removeAttribute('readonly')">
+            <span class="input-group-text"><i class="fas fa-search"></i></span>
+            <button class="btn btn-success" onclick="document.getElementById('formFuncionario').classList.toggle('d-none')">
+              <i class="fas fa-plus"></i> Novo
+            </button>
+          </div>
         </div>
 
-        <div id="formFuncionario" class="card p-3 shadow-sm d-none centralizar-formulario">
-          <div id="mensagemFuncionario" class="alert d-none" role="alert"></div>
-          <div class="mb-2"><label class="form-label">Nome</label><input type="text" id="funcNome" class="form-control" required></div>
-          <div class="mb-2"><label class="form-label">CPF</label><input type="text" id="funcCpf" class="form-control" required></div>
-          <div class="mb-2"><label class="form-label">CRO</label><input type="text" id="funcCro" class="form-control" required></div>
-          <div class="mb-2"><label class="form-label">Email</label><input type="email" id="funcEmail" class="form-control" required></div>
-          <div class="mb-2"><label class="form-label">Senha</label><input type="password" id="funcSenha" class="form-control" required></div>
-          <div class="text-center">
-            <button class="btn btn-success" onclick="criarFuncionario()">Salvar</button>
+        <div id="formFuncionario" class="card shadow-sm d-none mb-4">
+          <div class="card-header bg-primary text-white">
+            <h5 class="card-title mb-0">
+              <i class="fas fa-user-md me-2"></i>Novo Funcionário
+            </h5>
+          </div>
+          <div class="card-body">
+            <div id="mensagemFuncionario" class="alert d-none mb-4" role="alert"></div>
+            
+            <form class="row g-3">
+              <div class="col-md-6">
+                <div class="form-floating mb-3">
+                  <input type="text" id="funcNome" class="form-control" placeholder="Digite o nome completo" required>
+                  <label for="funcNome"><i class="fas fa-user me-2"></i>Nome Completo</label>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <div class="form-floating mb-3">
+                  <input type="text" id="funcCpf" class="form-control" placeholder="Digite o CPF" required>
+                  <label for="funcCpf"><i class="fas fa-id-card me-2"></i>CPF</label>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <div class="form-floating mb-3">
+                  <input type="text" id="funcCro" class="form-control" placeholder="Digite o CRO" required>
+                  <label for="funcCro"><i class="fas fa-stethoscope me-2"></i>CRO</label>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <div class="form-floating mb-3">
+                  <input type="email" id="funcEmail" class="form-control" placeholder="Digite o email" required>
+                  <label for="funcEmail"><i class="fas fa-envelope me-2"></i>Email</label>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <div class="form-floating mb-3">
+                  <input type="password" id="funcSenha" class="form-control" placeholder="Digite a senha" required>
+                  <label for="funcSenha"><i class="fas fa-lock me-2"></i>Senha</label>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <div class="form-floating mb-3">
+                  <input type="password" id="funcConfirmarSenha" class="form-control" placeholder="Confirme a senha" required>
+                  <label for="funcConfirmarSenha"><i class="fas fa-lock me-2"></i>Confirmar Senha</label>
+                </div>
+              </div>
+
+              <div class="col-12 text-end">
+                <button type="button" class="btn btn-secondary me-2" onclick="document.getElementById('formFuncionario').classList.add('d-none')">
+                  <i class="fas fa-times me-2"></i>Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="criarFuncionario()">
+                  <i class="fas fa-save me-2"></i>Salvar
+                </button>
+              </div>
+            </form>
           </div>
         </div>
 
         <div class="mt-4" id="funcionarioList"></div>
       `;
+      // Listar funcionários automaticamente
+      listarFuncionarios();
     }
     if (secao === "pacientes") {
       conteudo.innerHTML = `
         <div class="mb-3">
-          <button class="btn btn-primary" onclick="listarPacientes()">Listar Pacientes</button>
+          <div class="input-group">
+            <input type="search" id="pesquisaPaciente" class="form-control" 
+              placeholder="Pesquisar por nome ou CPF..." 
+              onkeyup="filtrarPacientes()" 
+              autocomplete="off"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false">
+            <span class="input-group-text"><i class="fas fa-search"></i></span>
+          </div>
         </div>
 
         <div class="mt-4" id="pacienteList"></div>
       `;
+      // Listar pacientes automaticamente
+      listarPacientes();
+    }
+    if (secao === "relatorios") {
+      conteudo.innerHTML = `
+        <div class="divisor-secao">
+          <h4 class="mb-4">Relatório de Consultas</h4>
+          
+          <!-- Filtros -->
+          <div class="card shadow-sm mb-4">
+            <div class="card-body">
+              <form id="formFiltroRelatorio" class="row g-3">
+                <div class="col-md-3">
+                  <label class="form-label">Tipo de Período</label>
+                  <select class="form-select" id="tipoPeriodo" onchange="atualizarFiltrosPeriodo()">
+                    <option value="diario">Diário</option>
+                    <option value="semanal">Semanal</option>
+                    <option value="mensal">Mensal</option>
+                    <option value="anual">Anual</option>
+                    <option value="personalizado">Personalizado</option>
+                  </select>
+                </div>
+                
+                <div class="col-md-3" id="filtroDataInicial">
+                  <label class="form-label">Data Inicial</label>
+                  <input type="date" class="form-control" id="dataInicial">
+                </div>
+                
+                <div class="col-md-3" id="filtroDataFinal">
+                  <label class="form-label">Data Final</label>
+                  <input type="date" class="form-control" id="dataFinal">
+                </div>
+                
+                <div class="col-md-3 d-flex align-items-end">
+                  <button type="button" class="btn btn-primary w-100" onclick="gerarRelatorioConsultas()">
+                    <i class="fas fa-search me-2"></i>Gerar Relatório
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- Cards de Resumo -->
+          <div class="row mb-4">
+            <div class="col-md-3">
+              <div class="card h-100">
+                <div class="card-body">
+                  <h6 class="card-title text-white">Total de Consultas</h6>
+                  <h2 class="card-text text-white" id="totalConsultas">0</h2>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="card h-100">
+                <div class="card-body">
+                  <h6 class="card-title text-white">Taxa de Comparecimento</h6>
+                  <h2 class="card-text text-white" id="taxaComparecimento">0%</h2>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="card h-100">
+                <div class="card-body">
+                  <h6 class="card-title text-white">Horário Mais Popular</h6>
+                  <h2 class="card-text text-white" id="horarioPopular">-</h2>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="card h-100">
+                <div class="card-body">
+                  <h6 class="card-title text-white">Serviço Mais Solicitado</h6>
+                  <h2 class="card-text text-white" id="servicoPopular">-</h2>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Gráficos -->
+          <div class="row mb-4">
+            <div class="col-md-6">
+              <div class="card h-100 border-0 shadow-sm bg-primary">
+                <div class="card-body">
+                  <h5 class="card-title d-flex align-items-center mb-4 text-white">
+                    <i class="bi bi-bar-chart-line me-2 text-white"></i>
+                    Consultas por Período
+                  </h5>
+                  <div style="height: 250px;">
+                    <canvas id="graficoConsultasPeriodo"></canvas>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="card h-100 border-0 shadow-sm bg-primary">
+                <div class="card-body">
+                  <h5 class="card-title d-flex align-items-center mb-4 text-white">
+                    <i class="bi bi-pie-chart me-2 text-white"></i>
+                    Taxa de Comparecimento
+                  </h5>
+                  <div style="height: 250px;">
+                    <canvas id="graficoComparecimento"></canvas>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row mb-4">
+            <div class="col-md-6">
+              <div class="card h-100 border-0 shadow-sm bg-primary">
+                <div class="card-body">
+                  <h5 class="card-title d-flex align-items-center mb-4 text-white">
+                    <i class="bi bi-clock-history me-2 text-white"></i>
+                    Horários Mais Populares
+                  </h5>
+                  <div style="height: 250px;">
+                    <canvas id="graficoHorarios"></canvas>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="card h-100 border-0 shadow-sm bg-primary">
+                <div class="card-body">
+                  <h5 class="card-title d-flex align-items-center mb-4 text-white">
+                    <i class="bi bi-star me-2 text-white"></i>
+                    Serviços Mais Solicitados
+                  </h5>
+                  <div style="height: 250px;">
+                    <canvas id="graficoServicos"></canvas>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tabela de Dados -->
+          <div class="card shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title mb-3">Dados Detalhados</h5>
+                <div id="filtrosTabela" class="mb-3">
+                    <!-- Filtros serão inseridos aqui via JavaScript -->
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <small class="text-white" id="contadorResultados"></small>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Horário</th>
+                                <th>Paciente</th>
+                                <th>Dentista</th>
+                                <th>Serviço</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabelaConsultasBody">
+                            <!-- Dados serão inseridos via JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+      `;
+
+      // Inicializar os filtros de data
+      atualizarFiltrosPeriodo();
     }
   }
 
@@ -338,12 +812,41 @@
     document.getElementById("editarEmail").value = emailAtual;
     document.getElementById("editarDataNascimento").value = dataNascimentoAtual;
     document.getElementById("editarSenha").value = "";
+    document.getElementById("mensagemEdicao").className = "alert d-none";
+    document.getElementById("mensagemEdicao").innerText = "";
 
     const modal = new bootstrap.Modal(document.getElementById("modalEditarAdmin"));
     modal.show();
   }
 
-  function salvarEdicao() {
+  async function verificarEmailExistente(email, idAtual, tipo) {
+    try {
+        // Verificar em administradores
+        const responseAdmins = await fetch("http://localhost:8080/administrador/administradores");
+        if (!responseAdmins.ok) throw new Error("Erro ao verificar administradores");
+        const admins = await responseAdmins.json();
+        if (admins.some(a => a.email === email && a.id !== parseInt(idAtual))) return true;
+
+        // Verificar em pacientes
+        const responsePacientes = await fetch("http://localhost:8080/paciente/listar");
+        if (!responsePacientes.ok) throw new Error("Erro ao verificar pacientes");
+        const pacientes = await responsePacientes.json();
+        if (pacientes.some(p => p.email === email && p.id !== parseInt(idAtual))) return true;
+
+        // Verificar em funcionários
+        const responseFuncionarios = await fetch("http://localhost:8080/funcionarios/listar");
+        if (!responseFuncionarios.ok) throw new Error("Erro ao verificar funcionários");
+        const funcionarios = await responseFuncionarios.json();
+        if (funcionarios.some(f => f.email === email && f.id !== parseInt(idAtual))) return true;
+
+        return false;
+    } catch (error) {
+        console.error("Erro ao verificar email:", error);
+        throw error;
+    }
+  }
+
+  async function salvarEdicao() {
     const id = document.getElementById("editarId").value;
     const nome = document.getElementById("editarNome").value.trim();
     const email = document.getElementById("editarEmail").value.trim();
@@ -351,50 +854,63 @@
     const senha = document.getElementById("editarSenha").value.trim();
     const mensagemDiv = document.getElementById("mensagemEdicao");
 
-    // Limpa e esconde o campo de mensagem antes de validar
     mensagemDiv.className = "alert d-none";
     mensagemDiv.innerText = "";
 
     if (!nome || !email || !dataNascimento) {
-      mensagemDiv.className = "alert alert-warning";
-      mensagemDiv.innerText = "Preencha todos os campos obrigatórios.";
-      return;
+        mensagemDiv.className = "alert alert-warning";
+        mensagemDiv.innerText = "Preencha todos os campos obrigatórios.";
+        return;
     }
 
     const idade = verificaMaiorDeIdade(dataNascimento);
     if (idade < 18) {
-      mensagemDiv.className = "alert alert-danger";
-      mensagemDiv.innerText = "O administrador precisa ter pelo menos 18 anos.";
-      return;
+        mensagemDiv.className = "alert alert-danger";
+        mensagemDiv.innerText = "O administrador precisa ter pelo menos 18 anos.";
+        return;
     }
 
-    const body = { nome, email, dataNascimento };
-    if (senha) body.senha = senha;
+    try {
+        // Verificar email duplicado
+        const emailExiste = await verificarEmailExistente(email, id, 'admin');
+        if (emailExiste) {
+            mensagemDiv.className = "alert alert-danger";
+            mensagemDiv.innerText = "Este email já está cadastrado.";
+            return;
+        }
 
-    fetch(`http://localhost:8080/administrador/atualizar/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    })
-      .then(response => {
-        if (response.ok) {
-          mensagemDiv.className = "alert alert-success";
-          mensagemDiv.innerText = "Administrador atualizado com sucesso.";
+        const body = { nome, email, dataNascimento };
+        if (senha) body.senha = senha;
 
-          // Aguarda 2 segundos e fecha o modal
-          setTimeout(() => {
+        const updateResponse = await fetch(`http://localhost:8080/administrador/atualizar/${id}`, {
+            method: "PUT",
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+
+        if (!updateResponse.ok) {
+            const errorData = await updateResponse.text();
+            if (errorData.includes("Unique index or primary key violation")) {
+                mensagemDiv.className = "alert alert-danger";
+                mensagemDiv.innerText = "Este email já está cadastrado.";
+            } else {
+                mensagemDiv.className = "alert alert-danger";
+                mensagemDiv.innerText = "Erro ao atualizar administrador.";
+            }
+            return;
+        }
+
+        mensagemDiv.className = "alert alert-success";
+        mensagemDiv.innerText = "Administrador atualizado com sucesso!";
+        setTimeout(() => {
             bootstrap.Modal.getInstance(document.getElementById("modalEditarAdmin")).hide();
             listarAdmins();
-          }, 2000);
-        } else {
-          mensagemDiv.className = "alert alert-danger";
-          mensagemDiv.innerText = "Erro ao atualizar administrador.";
-        }
-      })
-      .catch(() => {
+        }, 2000);
+    } catch (error) {
+        console.error("Erro:", error);
         mensagemDiv.className = "alert alert-danger";
         mensagemDiv.innerText = "Erro de conexão com o servidor.";
-      });
+    }
   }
 
   function deletarAdmin(id) {
@@ -498,20 +1014,72 @@
     const cro = document.getElementById("funcCro").value.trim();
     const email = document.getElementById("funcEmail").value.trim();
     const senha = document.getElementById("funcSenha").value.trim();
+    const confirmarSenha = document.getElementById("funcConfirmarSenha").value.trim();
     const mensagem = document.getElementById("mensagemFuncionario");
 
     mensagem.className = "alert d-none";
     mensagem.innerText = "";
 
-    if (!nome || !cpf || !cro || !email || !senha) {
+    if (!nome || !cpf || !cro || !email || !senha || !confirmarSenha) {
       mensagem.className = "alert alert-warning";
       mensagem.innerText = "Todos os campos devem ser preenchidos!";
       return;
     }
 
-    const body = { nome, cpf, cro, email, senha };
+    if (senha !== confirmarSenha) {
+      mensagem.className = "alert alert-danger";
+      mensagem.innerText = "As senhas não coincidem!";
+      return;
+    }
 
     try {
+      // Verificar se o CPF já existe em pacientes
+      const responsePacientes = await fetch("http://localhost:8080/paciente/listar", {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!responsePacientes.ok) {
+        throw new Error("Erro ao verificar CPF");
+      }
+
+      const pacientes = await responsePacientes.json();
+      const cpfExistente = pacientes.find(p => p.cpf === cpf);
+
+      if (cpfExistente) {
+        mensagem.className = "alert alert-danger";
+        mensagem.innerText = "Este CPF já está cadastrado como paciente.";
+        return;
+      }
+
+      // Verificar se o email já existe como administrador
+      const responseAdmins = await fetch("http://localhost:8080/administrador/administradores", {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!responseAdmins.ok) {
+        throw new Error("Erro ao verificar email");
+      }
+
+      const admins = await responseAdmins.json();
+      const emailAdminExistente = admins.find(a => a.email === email);
+
+      if (emailAdminExistente) {
+        mensagem.className = "alert alert-danger";
+        mensagem.innerText = "Este email já está cadastrado como administrador.";
+        return;
+      }
+
+      // Se o CPF e email não existem, prosseguir com a criação do funcionário
+      const body = { nome, cpf, cro, email, senha };
+
       const response = await fetch("http://localhost:8080/funcionarios/criar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -526,6 +1094,13 @@
         document.getElementById("funcCro").value = "";
         document.getElementById("funcEmail").value = "";
         document.getElementById("funcSenha").value = "";
+        document.getElementById("funcConfirmarSenha").value = "";
+        
+        setTimeout(() => {
+          document.getElementById("formFuncionario").classList.add("d-none");
+          mensagem.className = "alert d-none";
+          listarFuncionarios();
+        }, 2000);
       } else {
         const erro = await response.text();
         mensagem.className = "alert alert-danger";
@@ -586,6 +1161,8 @@
     document.getElementById("funcEditarCro").value = cro;
     document.getElementById("funcEditarEmail").value = email;
     document.getElementById("funcEditarSenha").value = "";
+    document.getElementById("mensagemEdicaoFuncionario").className = "alert d-none";
+    document.getElementById("mensagemEdicaoFuncionario").innerText = "";
 
     const modal = new bootstrap.Modal(document.getElementById("modalEditarFuncionario"));
     modal.show();
@@ -604,36 +1181,55 @@
     mensagem.innerText = "";
 
     if (!nome || !cpf || !cro || !email) {
-      mensagem.className = "alert alert-warning";
-      mensagem.innerText = "Todos os campos obrigatórios devem ser preenchidos.";
-      return;
+        mensagem.className = "alert alert-warning";
+        mensagem.innerText = "Todos os campos obrigatórios devem ser preenchidos.";
+        return;
     }
 
-    const body = { nome, cpf, cro, email };
-    if (senha) body.senha = senha;
-
     try {
-      const response = await fetch(`http://localhost:8080/funcionarios/atualizar/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      });
+        // Verificar email duplicado
+        const emailExiste = await verificarEmailExistente(email, id, 'funcionario');
+        if (emailExiste) {
+            mensagem.className = "alert alert-danger";
+            mensagem.innerText = "Este email já está cadastrado.";
+            return;
+        }
 
-      if (response.ok) {
-        mensagem.className = "alert alert-success";
-        mensagem.innerText = "Funcionário atualizado com sucesso!";
-        setTimeout(() => {
-          bootstrap.Modal.getInstance(document.getElementById("modalEditarFuncionario")).hide();
-          listarFuncionarios();
-        }, 2000);
-      } else {
-        const erro = await response.text();
+        // Verificar CPF duplicado
+        const responseFuncionarios = await fetch("http://localhost:8080/funcionarios/listar");
+        if (!responseFuncionarios.ok) throw new Error("Erro ao verificar CPF");
+        const funcionarios = await responseFuncionarios.json();
+        const cpfExistente = funcionarios.find(f => f.cpf === cpf && f.id !== parseInt(id));
+        if (cpfExistente) {
+            mensagem.className = "alert alert-danger";
+            mensagem.innerText = "Este CPF já está cadastrado.";
+            return;
+        }
+
+        const body = { nome, cpf, cro, email };
+        if (senha) body.senha = senha;
+
+        const updateResponse = await fetch(`http://localhost:8080/funcionarios/atualizar/${id}`, {
+            method: "PUT",
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+
+        if (updateResponse.ok) {
+            mensagem.className = "alert alert-success";
+            mensagem.innerText = "Funcionário atualizado com sucesso!";
+            setTimeout(() => {
+                bootstrap.Modal.getInstance(document.getElementById("modalEditarFuncionario")).hide();
+                listarFuncionarios();
+            }, 2000);
+        } else {
+            mensagem.className = "alert alert-danger";
+            mensagem.innerText = "Erro ao atualizar funcionário.";
+        }
+    } catch (error) {
+        console.error("Erro:", error);
         mensagem.className = "alert alert-danger";
-        mensagem.innerText = "Erro ao atualizar: " + erro;
-      }
-    } catch (e) {
-      mensagem.className = "alert alert-danger";
-      mensagem.innerText = "Erro de conexão com o servidor.";
+        mensagem.innerText = "Erro de conexão com o servidor.";
     }
   }
 
@@ -663,6 +1259,8 @@
     document.getElementById("pacEditarDataNascimento").value = dataNascimento;
     document.getElementById("pacEditarEmail").value = email;
     document.getElementById("pacEditarSenha").value = "********";
+    document.getElementById("mensagemEdicaoPaciente").className = "alert d-none";
+    document.getElementById("mensagemEdicaoPaciente").innerText = "";
 
     const modal = new bootstrap.Modal(document.getElementById("modalEditarPaciente"));
     modal.show();
@@ -692,71 +1290,59 @@
     mensagem.innerText = "";
 
     if (!nome || !cpf || !dataNascimento || !email) {
-      mensagem.className = "alert alert-warning";
-      mensagem.innerText = "Todos os campos obrigatórios devem ser preenchidos.";
-      return;
-    }
-
-    // Verificar idade mínima (14 anos)
-    if (!verificaIdadeMinima(dataNascimento, 14)) {
-      mensagem.className = "alert alert-danger";
-      mensagem.innerText = "O paciente deve ter pelo menos 14 anos de idade.";
-      return;
-    }
-
-    // Primeiro, verificar se o CPF já existe (exceto para o próprio paciente)
-    try {
-      const response = await fetch("http://localhost:8080/paciente/listar", {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error("Erro ao verificar CPF");
-      }
-
-      const pacientes = await response.json();
-      const cpfExistente = pacientes.find(p => 
-        p.cpf === cpf && p.id !== parseInt(id)
-      );
-
-      if (cpfExistente) {
-        mensagem.className = "alert alert-danger";
-        mensagem.innerText = "Este CPF já está cadastrado para outro paciente.";
+        mensagem.className = "alert alert-warning";
+        mensagem.innerText = "Todos os campos obrigatórios devem ser preenchidos.";
         return;
-      }
+    }
 
-      // Se o CPF não existe, prosseguir com a atualização
-      const body = { nome, cpf, dataNascimento, email };
-
-      const updateResponse = await fetch(`http://localhost:8080/paciente/atualizar/${id}`, {
-        method: "PUT",
-        headers: { 
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
-      });
-
-      if (updateResponse.ok) {
-        mensagem.className = "alert alert-success";
-        mensagem.innerText = "Paciente atualizado com sucesso!";
-        setTimeout(() => {
-          bootstrap.Modal.getInstance(document.getElementById("modalEditarPaciente")).hide();
-          listarPacientes();
-        }, 2000);
-      } else {
-        const erro = await updateResponse.text();
+    if (!verificaIdadeMinima(dataNascimento, 14)) {
         mensagem.className = "alert alert-danger";
-        mensagem.innerText = "Erro ao atualizar: " + erro;
-      }
-    } catch (e) {
-      console.error("Erro:", e);
-      mensagem.className = "alert alert-danger";
-      mensagem.innerText = "Erro de conexão com o servidor.";
+        mensagem.innerText = "O paciente deve ter pelo menos 14 anos de idade.";
+        return;
+    }
+
+    try {
+        // Verificar email duplicado
+        const emailExiste = await verificarEmailExistente(email, id, 'paciente');
+        if (emailExiste) {
+            mensagem.className = "alert alert-danger";
+            mensagem.innerText = "Este email já está cadastrado.";
+            return;
+        }
+
+        // Verificar CPF duplicado
+        const responsePacientes = await fetch("http://localhost:8080/paciente/listar");
+        if (!responsePacientes.ok) throw new Error("Erro ao verificar CPF");
+        const pacientes = await responsePacientes.json();
+        const cpfExistente = pacientes.find(p => p.cpf === cpf && p.id !== parseInt(id));
+        if (cpfExistente) {
+            mensagem.className = "alert alert-danger";
+            mensagem.innerText = "Este CPF já está cadastrado.";
+            return;
+        }
+
+        const body = { nome, cpf, dataNascimento, email };
+        const updateResponse = await fetch(`http://localhost:8080/paciente/atualizar/${id}`, {
+            method: "PUT",
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+
+        if (updateResponse.ok) {
+            mensagem.className = "alert alert-success";
+            mensagem.innerText = "Paciente atualizado com sucesso!";
+            setTimeout(() => {
+                bootstrap.Modal.getInstance(document.getElementById("modalEditarPaciente")).hide();
+                listarPacientes();
+            }, 2000);
+        } else {
+            mensagem.className = "alert alert-danger";
+            mensagem.innerText = "Erro ao atualizar paciente.";
+        }
+    } catch (error) {
+        console.error("Erro:", error);
+        mensagem.className = "alert alert-danger";
+        mensagem.innerText = "Erro de conexão com o servidor.";
     }
   }
 
@@ -780,6 +1366,819 @@
       }
     } catch (error) {
       alert("Erro de conexão com o servidor.");
+    }
+  }
+
+  // Adicionar as funções de filtragem
+  function filtrarAdmins() {
+    const pesquisa = document.getElementById("pesquisaAdmin").value.toLowerCase();
+    const tabela = document.getElementById("adminList");
+    const linhas = tabela.getElementsByTagName("tr");
+
+    for (let i = 1; i < linhas.length; i++) {
+      const nome = linhas[i].getElementsByTagName("td")[0].textContent.toLowerCase();
+      if (nome.includes(pesquisa)) {
+        linhas[i].style.display = "";
+      } else {
+        linhas[i].style.display = "none";
+      }
+    }
+  }
+
+  function filtrarFuncionarios() {
+    const pesquisa = document.getElementById("pesquisaFuncionario").value.toLowerCase();
+    const tabela = document.getElementById("funcionarioList");
+    const linhas = tabela.getElementsByTagName("tr");
+
+    for (let i = 1; i < linhas.length; i++) {
+      const nome = linhas[i].getElementsByTagName("td")[0].textContent.toLowerCase();
+      const cpf = linhas[i].getElementsByTagName("td")[1].textContent.toLowerCase();
+      if (nome.includes(pesquisa) || cpf.includes(pesquisa)) {
+        linhas[i].style.display = "";
+      } else {
+        linhas[i].style.display = "none";
+      }
+    }
+  }
+
+  function filtrarPacientes() {
+    const pesquisa = document.getElementById("pesquisaPaciente").value.toLowerCase();
+    const tabela = document.getElementById("pacienteList");
+    const linhas = tabela.getElementsByTagName("tr");
+
+    for (let i = 1; i < linhas.length; i++) {
+      const nome = linhas[i].getElementsByTagName("td")[0].textContent.toLowerCase();
+      const cpf = linhas[i].getElementsByTagName("td")[1].textContent.toLowerCase();
+      if (nome.includes(pesquisa) || cpf.includes(pesquisa)) {
+        linhas[i].style.display = "";
+      } else {
+        linhas[i].style.display = "none";
+      }
+    }
+  }
+
+  // Adicionar as funções de relatório
+  function atualizarFiltrosPeriodo() {
+    const tipoPeriodo = document.getElementById("tipoPeriodo");
+    const dataInicial = document.getElementById("dataInicial");
+    const dataFinal = document.getElementById("dataFinal");
+    const hoje = new Date();
+
+    // Limpar valores anteriores
+    dataInicial.value = "";
+    dataFinal.value = "";
+
+    // Adicionar evento de mudança na data inicial
+    dataInicial.onchange = function() {
+        if (dataFinal.value && dataInicial.value > dataFinal.value) {
+            dataFinal.value = dataInicial.value;
+        }
+        dataFinal.min = dataInicial.value;
+    };
+
+    // Adicionar evento de mudança na data final
+    dataFinal.onchange = function() {
+        // Se a data final for diferente da inicial, mudar para personalizado
+        if (dataInicial.value && dataFinal.value !== dataInicial.value) {
+            tipoPeriodo.value = "personalizado";
+        }
+        
+        if (dataInicial.value && dataFinal.value < dataInicial.value) {
+            alert("A data final não pode ser menor que a data inicial");
+            dataFinal.value = dataInicial.value;
+        }
+    };
+
+    switch (tipoPeriodo.value) {
+        case "diario":
+            dataInicial.value = hoje.toISOString().split("T")[0];
+            dataFinal.value = hoje.toISOString().split("T")[0];
+            break;
+        case "semanal":
+            const inicioSemana = new Date(hoje.setDate(hoje.getDate() - hoje.getDay()));
+            const fimSemana = new Date(hoje.setDate(hoje.getDate() + 6));
+            dataInicial.value = inicioSemana.toISOString().split("T")[0];
+            dataFinal.value = fimSemana.toISOString().split("T")[0];
+            break;
+        case "mensal":
+            const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+            const fimMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+            dataInicial.value = inicioMes.toISOString().split("T")[0];
+            dataFinal.value = fimMes.toISOString().split("T")[0];
+            break;
+        case "anual":
+            const inicioAno = new Date(hoje.getFullYear(), 0, 1);
+            const fimAno = new Date(hoje.getFullYear(), 11, 31);
+            dataInicial.value = inicioAno.toISOString().split("T")[0];
+            dataFinal.value = fimAno.toISOString().split("T")[0];
+            break;
+        case "personalizado":
+            // Definir data mínima como hoje para ambos os campos
+            const hojeStr = hoje.toISOString().split("T")[0];
+            dataInicial.min = hojeStr;
+            dataFinal.min = hojeStr;
+            break;
+    }
+
+    // Atualizar o atributo min da data final baseado na data inicial
+    if (dataInicial.value) {
+        dataFinal.min = dataInicial.value;
+    }
+  }
+
+  async function gerarRelatorioConsultas() {
+    try {
+      // Obter parâmetros de filtro
+      const tipoPeriodo = document.getElementById("tipoPeriodo").value;
+      const dataInicio = document.getElementById("dataInicial").value;
+      const dataFim = document.getElementById("dataFinal").value;
+
+      console.log("Parâmetros do relatório:", { tipoPeriodo, dataInicio, dataFim });
+
+      // Construir URL com parâmetros
+      let url = "http://localhost:8080/consultas/listar"; // Corrigindo a URL do endpoint
+      const params = new URLSearchParams();
+      
+      if (tipoPeriodo === "personalizado") {
+        if (!dataInicio || !dataFim) {
+          alert("Por favor, selecione as datas de início e fim para o período personalizado.");
+          return;
+        }
+        params.append("dataInicio", dataInicio);
+        params.append("dataFim", dataFim);
+      }
+
+      url += "?" + params.toString();
+      console.log("URL da requisição:", url);
+
+      // Buscar dados com headers CORS
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Origin': 'http://127.0.0.1:5500'
+        },
+        mode: 'cors' // Explicitamente definindo o modo CORS
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Erro na resposta do servidor:", {
+          status: response.status,
+          statusText: response.statusText,
+          errorText: errorText
+        });
+        throw new Error(`Erro ao buscar dados das consultas: ${response.status} ${response.statusText}`);
+      }
+
+      const consultas = await response.json();
+      console.log("Total de consultas recebidas:", consultas.length);
+
+      // Filtrar consultas pelo período selecionado
+      const consultasFiltradas = consultas.filter(consulta => {
+        const dataConsulta = new Date(consulta.data);
+        const dataInicioFiltro = new Date(dataInicio);
+        const dataFimFiltro = new Date(dataFim);
+        return dataConsulta >= dataInicioFiltro && dataConsulta <= dataFimFiltro;
+      });
+
+      console.log("Consultas filtradas para o período:", consultasFiltradas.length);
+
+      if (consultasFiltradas.length === 0) {
+        alert("Não foram encontradas consultas para o período selecionado.");
+        return;
+      }
+
+      // Atualizar cards de resumo
+      atualizarCardsResumo(consultasFiltradas);
+
+      // Atualizar gráficos
+      atualizarGraficos(consultasFiltradas);
+
+      // Atualizar tabela
+      atualizarTabelaConsultas(consultasFiltradas);
+
+    } catch (error) {
+      console.error("Erro ao carregar relatório:", error);
+      alert(`Erro ao carregar o relatório de consultas: ${error.message}`);
+    }
+  }
+
+  function atualizarCardsResumo(consultas) {
+    const agora = new Date();
+    
+    // Total de Consultas
+    const totalConsultas = consultas.length;
+    document.getElementById("totalConsultas").textContent = totalConsultas;
+
+    // Taxa de Conclusão (consultas concluídas / total de consultas não canceladas)
+    const consultasNaoCanceladas = consultas.filter(c => c.status !== 'CANCELADA').length;
+    const concluidas = consultas.filter(c => {
+        if (c.status === 'CANCELADA') return false;
+        const [ano, mes, dia] = c.data.split('-').map(Number);
+        const [hora, minuto] = c.horario.split(':').map(Number);
+        const dataHoraConsulta = new Date(ano, mes - 1, dia, hora, minuto);
+        return dataHoraConsulta < agora;
+    }).length;
+
+    const taxaConclusao = consultasNaoCanceladas > 0 
+        ? ((concluidas / consultasNaoCanceladas) * 100).toFixed(1) 
+        : "0.0";
+    document.getElementById("taxaComparecimento").textContent = taxaConclusao + "%";
+
+    // Horário mais Popular (considerando apenas consultas não canceladas)
+    const horarios = {};
+    consultas.filter(c => c.status !== 'CANCELADA').forEach(c => {
+        horarios[c.horario] = (horarios[c.horario] || 0) + 1;
+    });
+    const horarioMaisPopular = Object.entries(horarios)
+        .sort((a, b) => b[1] - a[1])[0];
+    document.getElementById("horarioPopular").textContent = 
+        horarioMaisPopular ? horarioMaisPopular[0] : "N/A";
+
+    // Serviço mais Solicitado (considerando apenas consultas não canceladas)
+    const servicos = {};
+    consultas.filter(c => c.status !== 'CANCELADA').forEach(c => {
+        servicos[c.servico] = (servicos[c.servico] || 0) + 1;
+    });
+    const servicoMaisSolicitado = Object.entries(servicos)
+        .sort((a, b) => b[1] - a[1])[0];
+    document.getElementById("servicoPopular").textContent = 
+        servicoMaisSolicitado ? servicoMaisSolicitado[0] : "N/A";
+  }
+
+  function atualizarGraficos(consultas) {
+    // Destruir gráficos existentes
+    Object.values(Chart.instances).forEach(chart => chart.destroy());
+
+    // Preparar dados para os gráficos
+    const dadosPorPeriodo = prepararDadosPorPeriodo(consultas);
+    const dadosComparecimento = prepararDadosComparecimento(consultas);
+    const dadosHorarios = prepararDadosHorarios(consultas);
+    const dadosServicos = prepararDadosServicos(consultas);
+
+    // Criar gráficos
+    criarGraficoConsultasPeriodo(dadosPorPeriodo);
+    criarGraficoComparecimento(dadosComparecimento);
+    criarGraficoHorarios(dadosHorarios);
+    criarGraficoServicos(dadosServicos);
+  }
+
+  function prepararDadosPorPeriodo(consultas) {
+    const tipoPeriodo = document.getElementById("tipoPeriodo").value;
+    const dados = {};
+    
+    // Função para formatar a data de forma mais bonita
+    function formatarData(data, tipo) {
+        const d = new Date(data);
+        const meses = {
+            '01': 'Jan', '02': 'Fev', '03': 'Mar', '04': 'Abr',
+            '05': 'Mai', '06': 'Jun', '07': 'Jul', '08': 'Ago',
+            '09': 'Set', '10': 'Out', '11': 'Nov', '12': 'Dez'
+        };
+
+        switch (tipo) {
+            case "diario":
+                const dia = d.getDate().toString().padStart(2, '0');
+                const mes = meses[(d.getMonth() + 1).toString().padStart(2, '0')];
+                return `${dia} ${mes}`;
+            case "semanal":
+                const inicioSemana = new Date(d);
+                inicioSemana.setDate(d.getDate() - d.getDay());
+                const fimSemana = new Date(inicioSemana);
+                fimSemana.setDate(inicioSemana.getDate() + 6);
+                
+                const diaInicio = inicioSemana.getDate().toString().padStart(2, '0');
+                const mesInicio = meses[(inicioSemana.getMonth() + 1).toString().padStart(2, '0')];
+                const diaFim = fimSemana.getDate().toString().padStart(2, '0');
+                const mesFim = meses[(fimSemana.getMonth() + 1).toString().padStart(2, '0')];
+                
+                return `${diaInicio} ${mesInicio} - ${diaFim} ${mesFim}`;
+            case "mensal":
+                const mesNome = meses[(d.getMonth() + 1).toString().padStart(2, '0')];
+                return mesNome;
+            case "anual":
+                return d.getFullYear().toString();
+            default:
+                const diaPadrao = d.getDate().toString().padStart(2, '0');
+                const mesPadrao = meses[(d.getMonth() + 1).toString().padStart(2, '0')];
+                return `${diaPadrao} ${mesPadrao}`;
+        }
+    }
+    
+    // Agrupar consultas por período
+    consultas.forEach(consulta => {
+        if (!consulta.data) return;
+        const dataFormatada = formatarData(consulta.data, tipoPeriodo);
+        dados[dataFormatada] = (dados[dataFormatada] || 0) + 1;
+    });
+
+    // Ordenar as datas
+    const labels = Object.keys(dados).sort((a, b) => {
+        if (tipoPeriodo === "semanal") {
+            const dataA = new Date(a.split(' - ')[0].split(' ').reverse().join('-'));
+            const dataB = new Date(b.split(' - ')[0].split(' ').reverse().join('-'));
+            return dataA - dataB;
+        } else if (tipoPeriodo === "mensal") {
+            const meses = {
+                'Jan': 1, 'Fev': 2, 'Mar': 3, 'Abr': 4,
+                'Mai': 5, 'Jun': 6, 'Jul': 7, 'Ago': 8,
+                'Set': 9, 'Out': 10, 'Nov': 11, 'Dez': 12
+            };
+            return meses[a] - meses[b];
+        } else {
+            const dataA = new Date(a.split(' ').reverse().join('-'));
+            const dataB = new Date(b.split(' ').reverse().join('-'));
+            return dataA - dataB;
+        }
+    });
+
+    return {
+        labels: labels,
+        valores: labels.map(label => dados[label])
+    };
+  }
+
+  function prepararDadosComparecimento(consultas) {
+    const agora = new Date();
+    let concluidas = 0;
+    let agendadas = 0;
+    let canceladas = 0;
+
+    consultas.forEach(consulta => {
+        if (consulta.status === 'CANCELADA') {
+            canceladas++;
+        } else {
+            const [ano, mes, dia] = consulta.data.split('-').map(Number);
+            const [hora, minuto] = consulta.horario.split(':').map(Number);
+            const dataHoraConsulta = new Date(ano, mes - 1, dia, hora, minuto);
+
+            if (dataHoraConsulta < agora) {
+                concluidas++;
+            } else {
+                agendadas++;
+            }
+        }
+    });
+
+    return {
+        labels: ["Concluídas", "Agendadas", "Canceladas"],
+        valores: [concluidas, agendadas, canceladas]
+    };
+  }
+
+  function prepararDadosHorarios(consultas) {
+    const horarios = {};
+    consultas.forEach(c => {
+      horarios[c.horario] = (horarios[c.horario] || 0) + 1;
+    });
+
+    const ordenados = Object.entries(horarios)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5); // Top 5 horários
+
+    return {
+      labels: ordenados.map(h => h[0]),
+      valores: ordenados.map(h => h[1])
+    };
+  }
+
+  function prepararDadosServicos(consultas) {
+    const servicos = {};
+    consultas.forEach(c => {
+      servicos[c.servico] = (servicos[c.servico] || 0) + 1;
+    });
+
+    const ordenados = Object.entries(servicos)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5); // Top 5 serviços
+
+    return {
+      labels: ordenados.map(s => s[0]),
+      valores: ordenados.map(s => s[1])
+    };
+  }
+
+  function criarGraficoConsultasPeriodo(dados) {
+    const ctx = document.getElementById("graficoConsultasPeriodo");
+    // Definir altura fixa para o canvas
+    ctx.style.height = '250px';
+    
+    new Chart(ctx, {
+        type: "bar",
+        data: {
+            labels: dados.labels,
+            datasets: [{
+                label: "Número de Consultas",
+                data: dados.valores,
+                backgroundColor: "rgba(255, 255, 255, 0.8)",
+                borderColor: "rgb(255, 255, 255)",
+                borderWidth: 1,
+                borderRadius: 5,
+                barThickness: 20
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            aspectRatio: 1.5,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12,
+                    cornerRadius: 8,
+                    titleFont: {
+                        size: 14,
+                        weight: 'bold'
+                    },
+                    bodyFont: {
+                        size: 13
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1,
+                        color: 'white',
+                        font: {
+                            size: 12
+                        }
+                    },
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    }
+                },
+                x: {
+                    ticks: {
+                        color: 'white',
+                        font: {
+                            size: 11,
+                            weight: '500'
+                        },
+                        padding: 10
+                    },
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
+  }
+
+  function criarGraficoComparecimento(dados) {
+    const ctx = document.getElementById("graficoComparecimento");
+    ctx.style.height = '250px';
+
+    new Chart(ctx, {
+      type: "pie",
+      data: {
+        labels: dados.labels,
+        datasets: [{
+          data: dados.valores,
+          backgroundColor: [
+            "rgba(255, 255, 255, 0.9)",
+            "rgba(255, 255, 255, 0.7)",
+            "rgba(255, 255, 255, 0.5)"
+          ],
+          borderColor: [
+            "rgb(255, 255, 255)",
+            "rgb(255, 255, 255)",
+            "rgb(255, 255, 255)"
+          ],
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        aspectRatio: 1.5,
+        layout: {
+          padding: {
+            top: 20,
+            bottom: 20
+          }
+        },
+        plugins: {
+          legend: {
+            position: "bottom",
+            align: "center",
+            labels: {
+              color: 'white',
+              padding: 20,
+              font: {
+                size: 12
+              },
+              boxWidth: 15,
+              boxHeight: 15
+            }
+          },
+          tooltip: {
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            padding: 12,
+            cornerRadius: 8,
+            callbacks: {
+              label: function(context) {
+                return `${context.label}: ${context.raw}%`;
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  function criarGraficoHorarios(dados) {
+    const ctx = document.getElementById("graficoHorarios");
+    ctx.style.height = '250px';
+
+    new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: dados.labels,
+        datasets: [{
+          label: "Número de Consultas",
+          data: dados.valores,
+          backgroundColor: "rgba(255, 255, 255, 0.8)",
+          borderColor: "rgb(255, 255, 255)",
+          borderWidth: 1,
+          borderRadius: 5,
+          barThickness: 20
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        aspectRatio: 1.5,
+        plugins: {
+          legend: {
+            display: false
+          },
+          tooltip: {
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            padding: 12,
+            cornerRadius: 8,
+            titleFont: {
+              size: 14,
+              weight: 'bold'
+            },
+            bodyFont: {
+              size: 13
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              stepSize: 1,
+              color: 'white',
+              font: {
+                size: 12
+              }
+            },
+            grid: {
+              color: 'rgba(255, 255, 255, 0.1)'
+            }
+          },
+          x: {
+            ticks: {
+              color: 'white',
+              font: {
+                size: 12
+              }
+            },
+            grid: {
+              display: false
+            }
+          }
+        }
+      }
+    });
+  }
+
+  function criarGraficoServicos(dados) {
+    const ctx = document.getElementById("graficoServicos");
+    ctx.style.height = '250px';
+
+    // Criar uma paleta de brancos com diferentes opacidades
+    const cores = [
+        'rgba(255, 255, 255, 0.9)',  // Branco mais claro
+        'rgba(255, 255, 255, 0.8)',  // Branco claro
+        'rgba(255, 255, 255, 0.7)',  // Branco médio-claro
+        'rgba(255, 255, 255, 0.6)',  // Branco médio
+        'rgba(255, 255, 255, 0.5)'   // Branco médio-escuro
+    ];
+
+    new Chart(ctx, {
+      type: "pie",
+      data: {
+        labels: dados.labels,
+        datasets: [{
+          data: dados.valores,
+          backgroundColor: cores,
+          borderColor: cores.map(cor => 'rgba(255, 255, 255, 1)'),
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        aspectRatio: 1.5,
+        layout: {
+          padding: {
+            top: 20,
+            bottom: 20
+          }
+        },
+        plugins: {
+          legend: {
+            position: "bottom",
+            align: "center",
+            labels: {
+              color: 'white',
+              padding: 20,
+              font: {
+                size: 12
+              },
+              boxWidth: 15,
+              boxHeight: 15
+            }
+          },
+          tooltip: {
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            padding: 12,
+            cornerRadius: 8,
+            titleFont: {
+              size: 14,
+              weight: 'bold'
+            },
+            bodyFont: {
+              size: 13
+            }
+          }
+        }
+      }
+    });
+  }
+
+  function atualizarTabelaConsultas(consultas) {
+    const tbody = document.querySelector("#tabelaConsultasBody");
+    const filtrosContainer = document.querySelector("#filtrosTabela");
+    
+    if (!tbody || !filtrosContainer) {
+        console.error("Elementos necessários não encontrados");
+        return;
+    }
+
+    // Armazenar as consultas globalmente para uso nos filtros
+    window.consultasAtuais = consultas;
+
+    // Criar filtros se ainda não existirem
+    if (!document.getElementById("filtroStatus")) {
+        const filtrosHTML = `
+            <div class="row mb-3">
+                <div class="col-md-3">
+                    <label class="form-label text-white">Status</label>
+                    <select class="form-select" id="filtroStatus" onchange="aplicarFiltrosTabela()">
+                        <option value="">Todos</option>
+                        <option value="CONCLUÍDA">Concluídas</option>
+                        <option value="AGENDADA">Agendadas</option>
+                        <option value="CANCELADA">Canceladas</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-white">Dentista</label>
+                    <select class="form-select" id="filtroDentista" onchange="aplicarFiltrosTabela()">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-white">Serviço</label>
+                    <select class="form-select" id="filtroServico" onchange="aplicarFiltrosTabela()">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-white">Buscar</label>
+                    <input type="text" class="form-control" id="filtroBusca" 
+                           placeholder="Buscar por paciente..." 
+                           onkeyup="aplicarFiltrosTabela()">
+                </div>
+            </div>
+        `;
+        filtrosContainer.innerHTML = filtrosHTML;
+
+        // Preencher opções dos filtros
+        const dentistas = [...new Set(consultas.map(c => c.dr ? c.dr.split(' - ')[0] : '').filter(Boolean))];
+        const servicos = [...new Set(consultas.map(c => c.servico).filter(Boolean))];
+
+        const selectDentista = document.getElementById("filtroDentista");
+        const selectServico = document.getElementById("filtroServico");
+
+        dentistas.sort().forEach(dentista => {
+            selectDentista.add(new Option(dentista, dentista));
+        });
+
+        servicos.sort().forEach(servico => {
+            selectServico.add(new Option(servico, servico));
+        });
+    }
+
+    // Aplicar filtros iniciais
+    aplicarFiltrosTabela();
+}
+
+function aplicarFiltrosTabela() {
+    const tbody = document.querySelector("#tabelaConsultasBody");
+    if (!tbody || !window.consultasAtuais) return;
+
+    const filtroStatus = document.getElementById("filtroStatus").value;
+    const filtroDentista = document.getElementById("filtroDentista").value;
+    const filtroServico = document.getElementById("filtroServico").value;
+    const filtroBusca = document.getElementById("filtroBusca").value.toLowerCase();
+
+    const agora = new Date();
+    let html = '';
+    
+    const consultasFiltradas = window.consultasAtuais.filter(consulta => {
+        // Determinar status atual
+        const [ano, mes, dia] = consulta.data.split('-').map(Number);
+        const [hora, minuto] = consulta.horario.split(':').map(Number);
+        const dataHoraConsulta = new Date(ano, mes - 1, dia, hora, minuto);
+        
+        let status = consulta.status;
+        if (status !== 'CANCELADA') {
+            status = dataHoraConsulta < agora ? 'CONCLUÍDA' : 'AGENDADA';
+        }
+
+        // Aplicar filtros
+        if (filtroStatus && status !== filtroStatus) return false;
+        
+        const nomeDentista = consulta.dr ? consulta.dr.split(' - ')[0] : '';
+        if (filtroDentista && nomeDentista !== filtroDentista) return false;
+        
+        if (filtroServico && consulta.servico !== filtroServico) return false;
+        
+        if (filtroBusca && !consulta.nome?.toLowerCase().includes(filtroBusca)) return false;
+
+        return true;
+    });
+
+    // Atualizar contador de resultados
+    const contadorResultados = document.getElementById("contadorResultados");
+    if (contadorResultados) {
+        contadorResultados.textContent = `${consultasFiltradas.length} consulta${consultasFiltradas.length !== 1 ? 's' : ''} encontrada${consultasFiltradas.length !== 1 ? 's' : ''}`;
+    }
+
+    // Renderizar tabela
+    consultasFiltradas.forEach(consulta => {
+        const [ano, mes, dia] = consulta.data.split('-').map(Number);
+        const [hora, minuto] = consulta.horario.split(':').map(Number);
+        const dataHoraConsulta = new Date(ano, mes - 1, dia, hora, minuto);
+
+        let status = consulta.status;
+        if (status !== 'CANCELADA') {
+            status = dataHoraConsulta < agora ? 'CONCLUÍDA' : 'AGENDADA';
+        }
+
+        const nomeDentista = consulta.dr ? consulta.dr.split(' - ')[0] : '-';
+
+        html += `
+            <tr>
+                <td>${consulta.data}</td>
+                <td>${consulta.horario}</td>
+                <td>${consulta.nome || '-'}</td>
+                <td>${nomeDentista}</td>
+                <td>${consulta.servico || '-'}</td>
+                <td>
+                    <span class="badge ${getStatusClass(status)}">
+                        ${status}
+                    </span>
+                </td>
+            </tr>
+        `;
+    });
+
+    tbody.innerHTML = html;
+}
+
+  function getStatusClass(status) {
+    switch (status) {
+        case "CONCLUÍDA":
+            return "bg-success";
+        case "AGENDADA":
+            return "bg-primary";
+        case "CANCELADA":
+            return "bg-danger";
+        default:
+            return "bg-secondary";
     }
   }
 
