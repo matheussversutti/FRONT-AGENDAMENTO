@@ -8,6 +8,7 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="js/cpf-validation.js"></script>
   <style>
     body {
       padding-top: 70px;
@@ -526,8 +527,9 @@
 
               <div class="col-md-6">
                 <div class="form-floating mb-3">
-                  <input type="text" id="funcCpf" class="form-control" placeholder="Digite o CPF" required>
+                  <input type="text" id="funcCpf" class="form-control cpf-input" placeholder="Digite o CPF" required maxlength="11">
                   <label for="funcCpf"><i class="fas fa-id-card me-2"></i>CPF</label>
+                  <div class="invalid-feedback">CPF inválido</div>
                 </div>
               </div>
 
@@ -1026,6 +1028,34 @@
       return;
     }
 
+    // Validação rigorosa do CPF
+    // Verifica se o CPF contém apenas números
+    if (!/^\d+$/.test(cpf)) {
+      mensagem.className = "alert alert-danger";
+      mensagem.innerText = "O CPF deve conter apenas números.";
+      document.getElementById("funcCpf").classList.add('is-invalid');
+      document.getElementById("funcCpf").classList.remove('is-valid');
+      return;
+    }
+
+    // Verifica se o CPF tem 11 dígitos
+    if (cpf.length !== 11) {
+      mensagem.className = "alert alert-danger";
+      mensagem.innerText = "O CPF deve conter 11 dígitos.";
+      document.getElementById("funcCpf").classList.add('is-invalid');
+      document.getElementById("funcCpf").classList.remove('is-valid');
+      return;
+    }
+
+    // Verifica se o CPF é válido
+    if (!window.CPFValidation.validate(cpf)) {
+      mensagem.className = "alert alert-danger";
+      mensagem.innerText = "CPF inválido. Por favor, insira um CPF válido.";
+      document.getElementById("funcCpf").classList.add('is-invalid');
+      document.getElementById("funcCpf").classList.remove('is-valid');
+      return;
+    }
+
     if (senha !== confirmarSenha) {
       mensagem.className = "alert alert-danger";
       mensagem.innerText = "As senhas não coincidem!";
@@ -1052,6 +1082,8 @@
       if (cpfExistente) {
         mensagem.className = "alert alert-danger";
         mensagem.innerText = "Este CPF já está cadastrado como paciente.";
+        document.getElementById("funcCpf").classList.add('is-invalid');
+        document.getElementById("funcCpf").classList.remove('is-valid');
         return;
       }
 
@@ -1095,6 +1127,7 @@
         document.getElementById("funcEmail").value = "";
         document.getElementById("funcSenha").value = "";
         document.getElementById("funcConfirmarSenha").value = "";
+        document.getElementById("funcCpf").classList.remove('is-invalid', 'is-valid');
         
         setTimeout(() => {
           document.getElementById("formFuncionario").classList.add("d-none");
@@ -1111,6 +1144,52 @@
       mensagem.innerText = "Erro de conexão com o servidor.";
     }
   }
+
+  // Adiciona validação em tempo real para o campo de CPF
+  document.addEventListener('DOMContentLoaded', function() {
+    const cpfInput = document.getElementById("funcCpf");
+    if (cpfInput) {
+      cpfInput.addEventListener('input', function(e) {
+        // Remove caracteres não numéricos
+        this.value = this.value.replace(/\D/g, '');
+        
+        // Limita a 11 dígitos
+        if (this.value.length > 11) {
+          this.value = this.value.slice(0, 11);
+        }
+
+        // Valida em tempo real
+        if (this.value.length === 11) {
+          if (!window.CPFValidation.validate(this.value)) {
+            this.classList.add('is-invalid');
+            this.classList.remove('is-valid');
+            document.getElementById("mensagemFuncionario").textContent = "CPF inválido. Por favor, insira um CPF válido.";
+            document.getElementById("mensagemFuncionario").className = "alert alert-danger";
+          } else {
+            this.classList.remove('is-invalid');
+            this.classList.add('is-valid');
+            document.getElementById("mensagemFuncionario").className = "alert d-none";
+          }
+        } else if (this.value.length > 0) {
+          this.classList.add('is-invalid');
+          this.classList.remove('is-valid');
+          document.getElementById("mensagemFuncionario").textContent = "O CPF deve conter 11 dígitos.";
+          document.getElementById("mensagemFuncionario").className = "alert alert-danger";
+        } else {
+          this.classList.remove('is-invalid', 'is-valid');
+          document.getElementById("mensagemFuncionario").className = "alert d-none";
+        }
+      });
+
+      // Previne a colagem de texto não numérico
+      cpfInput.addEventListener('paste', function(e) {
+        e.preventDefault();
+        const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+        const numericOnly = pastedText.replace(/\D/g, '');
+        this.value = numericOnly.slice(0, 11);
+      });
+    }
+  });
 
   async function listarFuncionarios() {
     try {
@@ -1183,6 +1262,13 @@
     if (!nome || !cpf || !cro || !email) {
         mensagem.className = "alert alert-warning";
         mensagem.innerText = "Todos os campos obrigatórios devem ser preenchidos.";
+        return;
+    }
+
+    // Validação do CPF
+    if (!CPFValidation.validate(cpf)) {
+        mensagem.className = "alert alert-danger";
+        mensagem.innerText = "Por favor, insira um CPF válido.";
         return;
     }
 
@@ -1295,9 +1381,10 @@
         return;
     }
 
-    if (!verificaIdadeMinima(dataNascimento, 14)) {
+    // Validação do CPF
+    if (!CPFValidation.validate(cpf)) {
         mensagem.className = "alert alert-danger";
-        mensagem.innerText = "O paciente deve ter pelo menos 14 anos de idade.";
+        mensagem.innerText = "Por favor, insira um CPF válido.";
         return;
     }
 
@@ -2276,7 +2363,11 @@ function aplicarFiltrosTabela() {
         <div id="mensagemEdicaoFuncionario" class="alert d-none" role="alert"></div>
         <input type="hidden" id="funcEditarId">
         <div class="mb-2"><label>Nome</label><input id="funcEditarNome" type="text" class="form-control"></div>
-        <div class="mb-2"><label>CPF</label><input id="funcEditarCpf" type="text" class="form-control"></div>
+        <div class="mb-2">
+          <label>CPF</label>
+          <input id="funcEditarCpf" type="text" class="form-control cpf-input" maxlength="11">
+          <div class="invalid-feedback">CPF inválido</div>
+        </div>
         <div class="mb-2"><label>CRO</label><input id="funcEditarCro" type="text" class="form-control"></div>
         <div class="mb-2"><label>Email</label><input id="funcEditarEmail" type="email" class="form-control"></div>
         <div class="mb-2"><label>Nova Senha (opcional)</label><input id="funcEditarSenha" type="password" class="form-control"></div>
@@ -2306,7 +2397,8 @@ function aplicarFiltrosTabela() {
         </div>
         <div class="mb-2">
           <label>CPF</label>
-          <input id="pacEditarCpf" type="text" class="form-control">
+          <input id="pacEditarCpf" type="text" class="form-control cpf-input" maxlength="11" placeholder="Digite apenas números">
+          <div class="invalid-feedback">CPF inválido</div>
         </div>
         <div class="mb-2">
           <label>Data de Nascimento</label>
@@ -2332,6 +2424,131 @@ function aplicarFiltrosTabela() {
 
 <!-- Bootstrap JS necessário para funcionar o modal -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+  // Aguarda o DOM e o script de validação estarem carregados
+  window.addEventListener('load', function() {
+    // Inicializa a validação de CPF
+    if (window.CPFValidation) {
+      window.CPFValidation.initialize();
+    } else {
+      console.error('CPFValidation não está disponível');
+    }
+
+    // Adiciona validação em tempo real para o CPF do funcionário
+    const cpfInput = document.getElementById("funcCpf");
+    const cpfEditarInput = document.getElementById("funcEditarCpf");
+    const erroDiv = document.getElementById("mensagemErro");
+
+    // Função para validar CPF em tempo real
+    function setupCPFValidationRealTime(inputElement) {
+      inputElement.addEventListener('input', function(e) {
+        const cpf = this.value.trim();
+        
+        // Remove caracteres não numéricos
+        this.value = cpf.replace(/\D/g, '');
+        
+        // Limita a 11 dígitos
+        if (this.value.length > 11) {
+          this.value = this.value.slice(0, 11);
+        }
+
+        // Valida em tempo real
+        if (this.value.length === 11) {
+          if (!window.CPFValidation.validate(this.value)) {
+            this.classList.add('is-invalid');
+            this.classList.remove('is-valid');
+            erroDiv.textContent = "CPF inválido. Por favor, insira um CPF válido.";
+            erroDiv.classList.remove("d-none");
+          } else {
+            this.classList.remove('is-invalid');
+            this.classList.add('is-valid');
+            erroDiv.classList.add("d-none");
+          }
+        } else if (this.value.length > 0) {
+          this.classList.add('is-invalid');
+          this.classList.remove('is-valid');
+          erroDiv.textContent = "O CPF deve conter 11 dígitos.";
+          erroDiv.classList.remove("d-none");
+        } else {
+          this.classList.remove('is-invalid', 'is-valid');
+          erroDiv.classList.add("d-none");
+        }
+      });
+    }
+
+    // Aplica a validação em tempo real para ambos os campos de CPF
+    setupCPFValidationRealTime(cpfInput);
+    setupCPFValidationRealTime(cpfEditarInput);
+
+    // Função para validar CPF antes de enviar
+    function validateCPFBeforeSubmit(cpf, inputElement) {
+      // Verifica se o CPF contém apenas números
+      if (!/^\d+$/.test(cpf)) {
+        erroDiv.textContent = "O CPF deve conter apenas números.";
+        erroDiv.classList.remove("d-none");
+        inputElement.classList.add('is-invalid');
+        inputElement.classList.remove('is-valid');
+        return false;
+      }
+
+      // Verifica se o CPF tem 11 dígitos
+      if (cpf.length !== 11) {
+        erroDiv.textContent = "O CPF deve conter 11 dígitos.";
+        erroDiv.classList.remove("d-none");
+        inputElement.classList.add('is-invalid');
+        inputElement.classList.remove('is-valid');
+        return false;
+      }
+      
+      // Verifica se o CPF é válido
+      if (!window.CPFValidation.validate(cpf)) {
+        erroDiv.textContent = "CPF inválido. Por favor, insira um CPF válido.";
+        erroDiv.classList.remove("d-none");
+        inputElement.classList.add('is-invalid');
+        inputElement.classList.remove('is-valid');
+        return false;
+      }
+
+      return true;
+    }
+
+    // Modifica a função criarFuncionario para incluir a validação de CPF
+    window.criarFuncionario = async function() {
+      const nome = document.getElementById("funcNome").value.trim();
+      const email = document.getElementById("funcEmail").value.trim();
+      const senha = document.getElementById("funcSenha").value.trim();
+      const cpf = document.getElementById("funcCpf").value.trim();
+      const cargo = document.getElementById("funcCargo").value;
+
+      // Validação do CPF
+      if (!validateCPFBeforeSubmit(cpf, cpfInput)) {
+        return;
+      }
+
+      // ... resto do código existente da função criarFuncionario ...
+    };
+
+    // Modifica a função salvarEdicaoFuncionario para incluir a validação de CPF
+    window.salvarEdicaoFuncionario = async function() {
+      const id = document.getElementById("funcEditarId").value;
+      const nome = document.getElementById("funcEditarNome").value.trim();
+      const email = document.getElementById("funcEditarEmail").value.trim();
+      const senha = document.getElementById("funcEditarSenha").value.trim();
+      const cpf = document.getElementById("funcEditarCpf").value.trim();
+      const cargo = document.getElementById("funcEditarCargo").value;
+
+      // Validação do CPF
+      if (!validateCPFBeforeSubmit(cpf, cpfEditarInput)) {
+        return;
+      }
+
+      // ... resto do código existente da função salvarEdicaoFuncionario ...
+    };
+
+    // ... resto do código existente ...
+  });
+</script>
 
 </body>
 </html>
